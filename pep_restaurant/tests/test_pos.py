@@ -1,0 +1,190 @@
+"""End-to-end POS rules: money math, kitchen flow, stock, settlement.
+
+bench --site <site> run-tests --app pep_restaurant
+"""
+
+import frappe
+from frappe.utils import flt
+
+try:
+	from frappe.tests import IntegrationTestCase as TestCase
+except ImportError:  # Frappe v14
+	from frappe.tests.utils import FrappeTestCase as TestCase
+
+from pep_restaurant import cashier, inventory, pos
+from pep_restaurant.public_api import qr_order
+
+REST = "_Test Pep Restaurant"
+
+
+def _ensure_user(email, role=None):
+	if not frappe.db.exists("User", email):
+		frappe.get_doc({"doctype": "User", "email": email, "first_name": email.split("@")[0],
+		                "send_welcome_email": 0,
+		                "roles": [{"role": role}] if role else []}).insert(ignore_permissions=True)
+	return email
+
+
+class TestPepPOS(TestCase):
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		frappe.set_user("Administrator")
+		from pep_restaurant.install import ensure_roles
+
+		ensure_roles()
+		if not frappe.db.exists("Pep Restaurant", REST):
+			frappe.get_doc({"doctype": "Pep Restaurant", "restaurant_name": REST, "currency": "INR",
+			                "tax_label": "GST", "tax_split": "CGST:50\nSGST:50",
+			                "require_open_session": 1}).insert()
+		cls.outlet = frappe.db.get_value("Pep Outlet", {"restaurant": REST, "outlet_name": "Test Hall"})
+		if not cls.outlet:
+			cls.outlet = frappe.get_doc({"doctype": "Pep Outlet", "restaurant": REST, "outlet_name": "Test Hall",
+			                             "tax_rate": 5, "service_charge_rate": 10,
+			                             "tables": "[Hall]\nT1:4\nT2:2"}).insert().name
+		cls.paneer = frappe.get_doc({"doctype": "Pep Ingredient", "restaurant": REST,
+		                             "ingredient_name": "Paneer", "uom": "kg", "cost_per_unit": 400}).insert().name
+		cls.tikka = frappe.get_doc({"doctype": "Pep Menu Item", "outlet": cls.outlet, "item_name": "Tikka",
+		                            "price": 300, "course": "Starter",
+		                            "recipe": [{"ingredient": cls.paneer, "qty": 0.2}]}).insert().name
+		cls.curry = frappe.get_doc({"doctype": "Pep Menu Item", "outlet": cls.outlet, "item_name": "Curry",
+		                            "price": 200, "course": "Main"}).insert().name
+		cls.cashier_user = _ensure_user("pep-cashier@example.com", "Restaurant Cashier")
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	def _order(self, **kw):
+		items = kw.pop("items", [{"menu_item": self.tikka, "qty": 2}, {"menu_item": self.curry, "qty": 1}])
+		return pos.create_order(outlet=self.outlet, items=items, table_no="T1", **kw)["order"]
+
+	def _stock(self):
+		return flt(frappe.db.get_value("Pep Ingredient Stock", f"{self.outlet}::{self.paneer}", "qty_on_hand"))
+
+	def test_price_comes_from_menu_and_totals(self):
+		name = self._order(items=[{"menu_item": self.tikka, "qty": 2, "rate": 1}])
+		doc = frappe.get_doc("Pep Order", name)
+		self.assertEqual(doc.items[0].rate, 300)  # the caller's rate is ignored
+		self.assertEqual(doc.subtotal, 600)
+		self.assertEqual(doc.service_charge, 60)  # 10% of net
+		self.assertEqual(doc.tax_amount, 33)  # 5% of 660
+		self.assertEqual(doc.grand_total, 693)
+		pos.apply_discount(order=name, amount=100, reason="regular")
+		doc.reload()
+		self.assertEqual(doc.order_total, 500)
+		self.assertEqual(doc.grand_total, flt((500 + 50) * 1.05, 2))
+
+	def test_prices_include_tax(self):
+		frappe.db.set_value("Pep Restaurant", REST, "prices_include_tax", 1)
+		try:
+			name = self._order(items=[{"menu_item": self.curry, "qty": 1}])
+			doc = frappe.get_doc("Pep Order", name)
+			self.assertEqual(doc.grand_total, 220)  # 200 + 10% service, tax inside
+			self.assertAlmostEqual(doc.tax_amount, flt(220 - 220 / 1.05, 2), places=2)
+		finally:
+			frappe.db.set_value("Pep Restaurant", REST, "prices_include_tax", 0)
+
+	def test_fire_deducts_stock_once_and_void_does_not_restore(self):
+		before = self._stock()
+		name = self._order()
+		out = pos.fire_kot(order=name)
+		self.assertEqual(out["kot_no"] > 0, True)
+		self.assertAlmostEqual(self._stock(), before - 0.4, places=6)
+		with self.assertRaises(frappe.ValidationError):
+			pos.fire_kot(order=name)  # nothing new to send
+		row = frappe.get_doc("Pep Order", name).items[0].name
+		pos.void_item(order=name, item_row=row, reason="guest changed mind")
+		self.assertAlmostEqual(self._stock(), before - 0.4, places=6)  # heat is irreversible
+
+	def test_course_firing_holds_the_rest(self):
+		name = self._order()
+		pos.fire_kot(order=name, course="Starter")
+		doc = frappe.get_doc("Pep Order", name)
+		states = {it.item_name: it.kot_status for it in doc.items}
+		self.assertEqual(states, {"Tikka": "Fired", "Curry": "New"})
+		board = next(o for o in pos.kitchen_queue(restaurant=REST, outlet=self.outlet) if o["name"] == name)
+		self.assertEqual(board["held_courses"], ["Main"])
+		self.assertEqual({i["item_name"]: i["state"] for i in board["items"]}, {"Tikka": "cooking", "Curry": "held"})
+
+	def test_split_does_not_double_deduct(self):
+		before = self._stock()
+		name = self._order()
+		pos.fire_kot(order=name)
+		row = next(it.name for it in frappe.get_doc("Pep Order", name).items if it.item_name == "Tikka")
+		new = pos.split_order(order=name, item_rows=[row], table_no="T2")["new_order"]
+		self.assertEqual(frappe.get_doc("Pep Order", new).items[0].stock_posted, 1)
+		pos.add_items(order=new, items=[{"menu_item": self.curry, "qty": 1}])
+		pos.fire_kot(order=new)
+		self.assertAlmostEqual(self._stock(), before - 0.4, places=6)
+
+	def test_bill_cannot_close_unsettled(self):
+		name = self._order()
+		with self.assertRaises(frappe.ValidationError):
+			pos.close_order(order=name)
+		with self.assertRaises(frappe.ValidationError):
+			pos.mark_nc(order=name, authorized_by="")
+		pos.mark_nc(order=name, authorized_by="GM", note="birthday")
+		self.assertEqual(frappe.db.get_value("Pep Order", name, "grand_total"), 0)
+		pos.close_order(order=name)
+		self.assertEqual(frappe.db.get_value("Pep Order", name, "status"), "Closed")
+
+	def test_payment_needs_shift_and_reconciles(self):
+		name = self._order(items=[{"menu_item": self.curry, "qty": 1}])  # 200 + 20 + 11 = 231
+		frappe.set_user(self.cashier_user)
+		with self.assertRaises(frappe.ValidationError):
+			pos.pay_order(order=name, mode="Cash")
+		sess = cashier.open_session(restaurant=REST, opening_float=1000)["name"]
+		out = pos.pay_order(order=name, payments=[{"mode": "Card", "amount": 100}, {"mode": "Cash", "amount": 200}])
+		self.assertEqual(out["change"], 69)
+		self.assertEqual(out["payment_mode"], "Split")
+		s = frappe.get_doc("Pep Cashier Session", sess)
+		self.assertEqual(s.system_card, 100)
+		self.assertEqual(s.system_cash, 131)
+		self.assertEqual(s.expected_cash, 1131)
+		with self.assertRaises(frappe.ValidationError):
+			cashier.close_session(session=sess, counted_cash=1100)  # variance needs a note
+		closed = cashier.close_session(session=sess, counted_cash=1100, notes="short 31")
+		self.assertEqual(closed["variance"], -31)
+
+	def test_card_cannot_be_over_tendered(self):
+		name = self._order(items=[{"menu_item": self.curry, "qty": 1}])
+		with self.assertRaises(frappe.ValidationError):
+			pos.pay_order(order=name, payments=[{"mode": "Card", "amount": 500}])
+
+	def test_qr_order_must_be_confirmed(self):
+		frappe.set_user("Guest")
+		out = qr_order(outlet=self.outlet, items=[{"menu_item": self.curry, "qty": 1, "rate": 0}], table_no="T2")
+		frappe.set_user("Administrator")
+		doc = frappe.get_doc("Pep Order", out["order"])
+		self.assertEqual((doc.source, doc.status, doc.items[0].rate), ("QR", "Placed", 200))
+		with self.assertRaises(frappe.ValidationError):
+			pos.fire_kot(order=doc.name)
+		pos.confirm_order(order=doc.name)
+		pos.fire_kot(order=doc.name)
+
+	def test_table_map_and_merge(self):
+		a = pos.create_order(outlet=self.outlet, items=[{"menu_item": self.tikka, "qty": 2},
+		                     {"menu_item": self.curry, "qty": 1}], table_no="M1")["order"]
+		b = pos.create_order(outlet=self.outlet, items=[{"menu_item": self.curry, "qty": 1}], table_no="M2")["order"]
+		tiles = {t["table"]: t for t in pos.table_map(outlet=self.outlet)["tables"]}
+		self.assertEqual(tiles["M1"]["state"], "running")  # ad-hoc table gets a live tile
+		self.assertTrue(tiles["M1"]["temp"])
+		pos.fire_kot(order=b)
+		self.assertEqual({t["table"]: t for t in pos.table_map(outlet=self.outlet)["tables"]}["M2"]["state"], "fired")
+		pos.merge_orders(order=b, into=a)
+		self.assertEqual(frappe.db.get_value("Pep Order", b, "status"), "Cancelled")
+		self.assertEqual(frappe.db.get_value("Pep Order", a, "subtotal"), 1000)
+
+	def test_stock_take_needs_note(self):
+		with self.assertRaises(frappe.ValidationError):
+			inventory.adjust_stock(outlet=self.outlet, rows=[{"ingredient": self.paneer, "counted_qty": 5}], note="")
+		out = inventory.adjust_stock(outlet=self.outlet, rows=[{"ingredient": self.paneer, "counted_qty": 5}],
+		                             note="weekly count")
+		self.assertEqual(self._stock(), 5)
+		self.assertTrue(out["ok"])
+
+	def test_role_gate(self):
+		_ensure_user("pep-nobody@example.com")
+		frappe.set_user("pep-nobody@example.com")
+		with self.assertRaises(frappe.PermissionError):
+			pos.table_map(outlet=self.outlet)

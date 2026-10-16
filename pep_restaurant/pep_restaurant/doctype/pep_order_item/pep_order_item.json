@@ -1,0 +1,136 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-16 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "menu_item",
+  "item_name",
+  "qty",
+  "rate",
+  "amount",
+  "instructions",
+  "course",
+  "prep_station",
+  "kot_status",
+  "fired_at",
+  "prepared_at",
+  "stock_posted",
+  "voided",
+  "void_reason",
+  "voided_by",
+  "void_seen"
+ ],
+ "fields": [
+  {
+   "fieldname": "menu_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Menu Item",
+   "options": "Pep Menu Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name"
+  },
+  {
+   "default": "1",
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "instructions",
+   "fieldtype": "Data",
+   "label": "Instructions"
+  },
+  {
+   "fieldname": "course",
+   "fieldtype": "Data",
+   "label": "Course"
+  },
+  {
+   "fieldname": "prep_station",
+   "fieldtype": "Data",
+   "label": "Prep Station"
+  },
+  {
+   "default": "New",
+   "fieldname": "kot_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Kot Status",
+   "options": "New\nFired\nPrepared"
+  },
+  {
+   "fieldname": "fired_at",
+   "fieldtype": "Datetime",
+   "label": "Fired At"
+  },
+  {
+   "fieldname": "prepared_at",
+   "fieldtype": "Datetime",
+   "label": "Prepared At"
+  },
+  {
+   "default": "0",
+   "fieldname": "stock_posted",
+   "fieldtype": "Check",
+   "label": "Stock Posted"
+  },
+  {
+   "default": "0",
+   "fieldname": "voided",
+   "fieldtype": "Check",
+   "label": "Voided"
+  },
+  {
+   "fieldname": "void_reason",
+   "fieldtype": "Data",
+   "label": "Void Reason"
+  },
+  {
+   "fieldname": "voided_by",
+   "fieldtype": "Link",
+   "label": "Voided By",
+   "options": "User"
+  },
+  {
+   "default": "0",
+   "fieldname": "void_seen",
+   "fieldtype": "Check",
+   "label": "Void Seen"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-16 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Pep Restaurant",
+ "name": "Pep Order Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

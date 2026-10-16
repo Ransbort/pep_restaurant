@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Pep: charcoal ink, cool paper, saffron brand */
+  --color-ink: #1d2733;
+  --color-ink-2: #3b4757;
+  --color-mute: #6b7686;
+  --color-line: #dfe3e8;
+  --color-paper: #f3f5f7;
+  --color-card: #ffffff;
+  --color-saffron: #f2a900;
+  --color-saffron-soft: #fff3d1;
+  --color-saffron-deep: #9a6b00;
+  --color-chili: #c62f3a;
+  --color-chili-soft: #fde7e8;
+  --color-basil: #1f7a4c;
+  --color-basil-soft: #e1f3e8;
+  --color-sky: #2563b0;
+  --color-sky-soft: #e3eefb;
+  --color-plum: #6d3fb3;
+  --color-plum-soft: #efe7fb;
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-feature-settings: "tnum" 1;
+  -webkit-tap-highlight-color: transparent;
+}
+.num { font-variant-numeric: tabular-nums; }
+.wide { font-stretch: 112%; }
+.narrow { font-stretch: 80%; }
+
+:focus-visible { outline: 3px solid var(--color-saffron); outline-offset: 2px; border-radius: 6px; }
+
+/* kitchen display: always dark - kitchens run screens at night */
+.kds {
+  --color-paper: #12161c;
+  --color-card: #1b212a;
+  --color-line: #2c3440;
+  --color-ink: #eef1f5;
+  --color-ink-2: #c7ced8;
+  --color-mute: #8d97a5;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.cleaning-stripes {
+  background-image: repeating-linear-gradient(135deg, transparent 0 8px, rgba(29,39,51,.06) 8px 16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+}

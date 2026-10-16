@@ -1,0 +1,9 @@
+{
+  "name": "pep_restaurant",
+  "private": true,
+  "description": "Build entrypoint for the Pep Restaurant SPA. The built assets are committed under pep_restaurant/public/frontend so a plain bench get-app serves the UI without a node build.",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "cd frontend && npm run dev"
+  }
+}
