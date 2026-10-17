@@ -72,7 +72,7 @@ export default function Till() {
   const [order, setOrder] = useState<Order | null>(null)
   const [draft, setDraft] = useState<Draft[]>([])
   const [head, setHead] = useState({ guests: "", customer_name: "", customer_phone: "", delivery_address: "", allergy_note: "", notes: "" })
-  const [cat, setCat] = useState<string>("")
+  const [cat, setCat] = useState<string>(ALL)
   const [q, setQ] = useState("")
   const [area, setArea] = useState<string>("All")
   const [pane, setPane] = useState<"floor" | "menu" | "bill">("floor")
@@ -96,7 +96,7 @@ export default function Till() {
     if (!outlet) return
     setSel(null); setOrder(null); setDraft([])
     call<{ categories: { category: string; items: MenuItem[] }[] }>(`${P}.pos.pos_menu`, { outlet: outlet.name })
-      .then((m) => { setMenu(m.categories); setCat(m.categories[0]?.category ?? "") })
+      .then((m) => { setMenu(m.categories); setCat(ALL) })
       .catch((e) => toast(errText(e), "bad"))
     loadMap()
   }, [outlet, loadMap, toast])
@@ -200,11 +200,20 @@ export default function Till() {
   const closeSel = () => { setSel(null); setOrder(null); setDraft([]); setPane("floor") }
 
   // ------------------------------------------------------------ menu view
-  const shown = useMemo(() => {
+  // what the menu pane shows, as headed groups: every category under "All",
+  // one category without a heading, or one list of search results
+  const groups = useMemo(() => {
     const term = q.trim().toLowerCase()
-    if (term) return menu.flatMap((c) => c.items).filter((i) => i.item_name.toLowerCase().includes(term))
-    return menu.find((c) => c.category === cat)?.items ?? []
+    if (term) {
+      const hits = menu.flatMap((c) => c.items).filter((i) =>
+        i.item_name.toLowerCase().includes(term) || (i.category ?? "").toLowerCase().includes(term))
+      return [{ category: "", items: hits }]
+    }
+    if (cat === ALL) return menu
+    return [{ category: "", items: menu.find((c) => c.category === cat)?.items ?? [] }]
   }, [menu, cat, q])
+  const shownCount = groups.reduce((n, g) => n + g.items.length, 0)
+  const totalCount = menu.reduce((n, c) => n + c.items.length, 0)
 
   const areas = useMemo(() => ["All", ...Array.from(new Set(map.tables.map((t) => t.area || "Tables")))], [map.tables])
   const tiles = map.tables.filter((t) => area === "All" || (t.area || "Tables") === area)
@@ -296,6 +305,10 @@ export default function Till() {
             </div>
             {!q && (
               <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+                <button onClick={() => setCat(ALL)} className={cn("shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold",
+                  cat === ALL ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-line")}>
+                  All <span className="opacity-60">{totalCount}</span>
+                </button>
                 {menu.map((c) => (
                   <button key={c.category} onClick={() => setCat(c.category)} className={cn("shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold",
                     cat === c.category ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-line")}>{c.category}</button>
@@ -305,26 +318,18 @@ export default function Till() {
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-3">
             {!sel && <p className="mb-3 rounded-lg bg-amber-soft px-3 py-2 text-sm font-medium text-amber-deep">Pick a table on the floor, or start a takeaway, to add items.</p>}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-              {shown.map((m) => {
-                const inCart = draft.filter((d) => d.menu_item === m.name).reduce((s, d) => s + d.qty, 0)
-                return (
-                  <button key={m.name} onClick={() => add(m)} disabled={closed}
-                    className="relative flex min-h-[86px] flex-col rounded-xl border border-line bg-card p-2.5 text-left transition hover:border-ink-2 active:scale-[.97] disabled:opacity-40">
-                    {inCart > 0 && <span className="absolute right-2 top-2 rounded-md bg-brand px-1.5 text-xs font-extrabold text-on-brand">{inCart}</span>}
-                    <span className="flex items-center gap-1.5 pr-6">
-                      <span aria-label={m.is_veg ? "Veg" : "Non-veg"} className={cn("size-2.5 shrink-0 rounded-sm border-2", m.is_veg ? "border-basil" : "border-chili")} />
-                      <span className="text-sm font-semibold leading-tight">{m.item_name}</span>
-                    </span>
-                    <span className="mt-auto flex items-end justify-between pt-1">
-                      <span className="text-sm font-bold">{money(m.price)}</span>
-                      {m.is_alcohol ? <Tag tone="plum">Bar</Tag> : <span className="text-[10px] text-mute">{m.course}</span>}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            {!shown.length && <p className="py-10 text-center text-sm text-mute">{q ? "Nothing on the menu matches." : "This category is empty."}</p>}
+            {groups.map((g) => (
+              <section key={g.category || "_"} className="mb-4 last:mb-0">
+                {g.category && <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-mute">{g.category}</h3>}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  {g.items.map((m) => (
+                    <DishTile key={m.name} m={m} disabled={closed} onAdd={() => add(m)}
+                      inCart={draft.filter((d) => d.menu_item === m.name).reduce((n, d) => n + d.qty, 0)} />
+                  ))}
+                </div>
+              </section>
+            ))}
+            {!shownCount && <p className="py-10 text-center text-sm text-mute">{q ? "Nothing on the menu matches." : "This category is empty."}</p>}
           </div>
         </section>
 
@@ -526,6 +531,39 @@ export default function Till() {
       {modal === "notes" && order && <NotesModal order={order} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await loadOrder(order.name) }} />}
       {modal === "reserve" && <ReserveModal outlet={outlet.name} tables={map.tables.map((t) => t.table)} onClose={() => setModal(null)} onDone={() => { setModal(null); loadMap() }} />}
     </div>
+  )
+}
+
+const ALL = "__all__"
+
+/** A menu tile: the dish's photo on top (or a tinted initial when it has
+ *  none, so the grid stays even), then name, veg mark and price. */
+function DishTile({ m, inCart, disabled, onAdd }: { m: MenuItem; inCart: number; disabled: boolean; onAdd: () => void }) {
+  const [broken, setBroken] = useState(false)
+  return (
+    <button onClick={onAdd} disabled={disabled}
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-line bg-card text-left transition hover:border-ink-2 active:scale-[.97] disabled:opacity-40">
+      <span className="relative block aspect-[4/3] w-full overflow-hidden bg-paper">
+        {m.image && !broken
+          ? <img src={m.image} alt="" loading="lazy" onError={() => setBroken(true)}
+              className="size-full object-cover transition duration-200 group-hover:scale-[1.04]" />
+          : <span aria-hidden className="flex size-full items-center justify-center bg-brand-soft text-3xl font-extrabold text-brand-deep">
+              {m.item_name.trim().charAt(0).toUpperCase()}
+            </span>}
+        {inCart > 0 && <span className="absolute right-1.5 top-1.5 rounded-md bg-brand px-2 py-0.5 text-sm font-extrabold text-on-brand shadow">{inCart}</span>}
+        {m.is_alcohol ? <span className="absolute left-1.5 top-1.5"><Tag tone="plum">Bar</Tag></span> : null}
+      </span>
+      <span className="flex flex-1 flex-col p-2">
+        <span className="flex items-start gap-1.5">
+          <span aria-label={m.is_veg ? "Veg" : "Non-veg"} className={cn("mt-1 size-2.5 shrink-0 rounded-sm border-2", m.is_veg ? "border-basil" : "border-chili")} />
+          <span className="line-clamp-2 text-sm font-semibold leading-tight">{m.item_name}</span>
+        </span>
+        <span className="mt-auto flex items-end justify-between pt-1.5">
+          <span className="text-sm font-bold">{money(m.price)}</span>
+          <span className="text-[10px] text-mute">{m.course}</span>
+        </span>
+      </span>
+    </button>
   )
 }
 
