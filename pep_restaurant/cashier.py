@@ -149,6 +149,9 @@ def close_session(session: str, counted_cash: float, notes: str | None = None, p
 		"status": "Closed", "counted_cash": flt(counted_cash, 2), "variance": variance, "closed_at": now(),
 		"closed_by": frappe.session.user, "close_notes": (notes or "").strip()[:500] or None,
 	})
+	from pep_restaurant.accounting import on_shift_closed
+
+	on_shift_closed(session, doc.restaurant)
 	return _as_dict(session)
 
 

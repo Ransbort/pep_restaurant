@@ -41,11 +41,14 @@ doc_events = {
 _SCOPED = (
 	"Pep Outlet", "Pep Menu Item", "Pep Order", "Pep Table Reservation",
 	"Pep Ingredient", "Pep Ingredient Stock", "Pep Stock Ledger Entry",
-	"Pep Cashier Session", "Pep Cashier Transaction",
+	"Pep Cashier Session", "Pep Cashier Transaction", "Pep Accounting Settings",
 )
 permission_query_conditions = {dt: "pep_restaurant.permissions.query_conditions" for dt in _SCOPED}
 has_permission = {dt: "pep_restaurant.permissions.has_permission" for dt in _SCOPED}
 
 scheduler_events = {
-	"daily": ["pep_restaurant.pos.expire_stale_reservations"],
+	"daily": [
+		"pep_restaurant.pos.expire_stale_reservations",
+		"pep_restaurant.accounting.sweep",
+	],
 }

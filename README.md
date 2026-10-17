@@ -92,6 +92,49 @@ Excel or Google Sheets and re-import it. Files saved by Excel (UTF-8 with BOM,
 or semicolon-separated) are accepted. Rows that fail are reported by line
 number; the rest still import.
 
+## Accounting (ERPNext, optional)
+
+On a site with ERPNext, paid bills can post to your books as Sales Invoices.
+Without ERPNext nothing changes: bills, payments and shifts stay in Pep Order,
+Pep Cashier Transaction and Pep Cashier Session.
+
+Set it up in **Settings → Accounting (ERPNext)** (managers):
+
+1. Pick the company, then **Fill in suggested settings**. This creates a
+   "Walk-in Customer" and a non-stock "Restaurant Sales" item if they're missing,
+   and suggests the income account, cost center, a tax account per tax line
+   (matched by name: VAT → "VAT - ABC"), and modes of payment that have an
+   account for the company.
+2. Check every mapping, choose **One invoice per shift** or **One invoice per
+   bill**, tick **Post sales to ERPNext**, and save. Saving refuses anything
+   that would fail later: wrong company, a non-income account for income, or a
+   mode of payment with no account.
+
+What gets posted:
+
+- A paid, POS-style Sales Invoice (`is_pos`) to the walk-in customer. The
+  payment rows are the actual tenders (cash, mobile money and so on), so the
+  sale, the tax and the money received are booked in one document, with nothing
+  left outstanding.
+- Food and drink revenue goes to the income account, after discounts and
+  excluding tax. You can post it as one "Restaurant Sales" line, or each dish as
+  its own non-stock Item (`PEP-MI-…`) so ERPNext sales reports show dishes.
+- Service charge goes to its own account. Each tax line (VAT, NHIL, CGST…) is an
+  "Actual" charge for the exact amount the till charged, including when menu
+  prices include tax. The invoice total equals what the till collected, to the
+  cent.
+- **Per shift**: posted when the cashier closes the shift. Bills paid without a
+  shift are posted per day, once the day is over. **Per bill**: posted right
+  after payment.
+- Never posted: NC (complimentary) bills, cancelled bills, and bills paid before
+  "Post bills paid from".
+
+Posting runs in a background job (the `short` queue), so the till never waits on
+ERPNext. A failure is recorded on the bill or shift (Accounting section in
+Desk) with the reason, shown under **Didn't post** in Settings, and retried by
+the daily job or the **Post waiting bills now** button. Posting the same bill or
+shift twice returns the existing invoice and never duplicates it.
+
 ## Rules carried over from Kamra
 
 - **Prices come from the menu.** Order lines are always re-priced server-side

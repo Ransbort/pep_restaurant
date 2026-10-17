@@ -28,7 +28,12 @@
   "counted_cash",
   "variance",
   "section_notes_sec",
-  "close_notes"
+  "close_notes",
+  "section_erp",
+  "erp_status",
+  "erp_invoice",
+  "column_break_e",
+  "erp_error"
  ],
  "fields": [
   {
@@ -162,11 +167,40 @@
    "fieldname": "close_notes",
    "fieldtype": "Small Text",
    "label": "Close Notes"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_erp",
+   "fieldtype": "Section Break",
+   "label": "Accounting (ERPNext)"
+  },
+  {
+   "fieldname": "erp_status",
+   "fieldtype": "Select",
+   "label": "Posting status",
+   "options": "\nPending\nPosted\nFailed\nSkipped",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erp_invoice",
+   "fieldtype": "Data",
+   "label": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_e",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "erp_error",
+   "fieldtype": "Small Text",
+   "label": "Posting error",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-16 12:00:00.000000",
+ "modified": "2026-10-17 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "Pep Restaurant",
  "name": "Pep Cashier Session",

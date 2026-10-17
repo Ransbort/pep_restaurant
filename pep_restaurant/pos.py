@@ -948,6 +948,9 @@ def pay_order(order: str, mode: str | None = None, payments=None, pin: str | Non
 	for t in tenders:
 		record_txn(doc.restaurant, "Payment", t["mode"], t["amount"], order=doc.name,
 		           reference=f"Bill {doc.name}", session=sess)
+	from pep_restaurant.accounting import on_bill_paid
+
+	on_bill_paid(doc.name, doc.restaurant)
 	_flag_cleaning_if_freed(doc)
 	return {"ok": True, "status": "Closed", "paid": True, "payment_mode": doc.payment_mode,
 	        "tenders": tenders, "change": change, "grand_total": doc.grand_total}

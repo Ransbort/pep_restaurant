@@ -9,6 +9,7 @@ import {
   setAppearance, setKitchenMode, type Appearance, type KitchenMode,
 } from "../lib/theme"
 import { Button, Input, PageHead, Tag, useToast } from "../components/ui"
+import Accounting from "./Accounting"
 
 const MODES: { id: Appearance; label: string; icon: typeof Sun; hint: string }[] = [
   { id: "light", label: "Light", icon: Sun, hint: "Bright rooms and daytime service" },
@@ -48,7 +49,7 @@ export default function Settings() {
 
   return (
     <>
-      <PageHead title="Settings" sub="How Pep looks on this device, and your restaurant's colour." />
+      <PageHead title="Settings" sub="How Pep looks on this device, your restaurant's colour, and accounting." />
       <div className="space-y-6">
         <section className="rounded-2xl border border-line bg-card p-5">
           <h2 className="text-base font-bold">Appearance</h2>
@@ -122,6 +123,8 @@ export default function Settings() {
             </div>
           )}
         </section>
+
+        {canBrand && <Accounting />}
       </div>
     </>
   )
