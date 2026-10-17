@@ -7,7 +7,7 @@ import { applyAccent } from "../lib/theme"
 import { cn } from "../lib/cn"
 import { Button, Field, Input, Modal } from "../components/ui"
 
-interface Item { name: string; item_name: string; category: string; price: number; is_veg: 0 | 1; is_alcohol: 0 | 1; image?: string; description?: string; allergens?: string }
+interface Item { name: string; item_name: string; category: string; price: number; is_veg: 0 | 1; is_alcohol: 0 | 1; image?: string; image_credit?: string; description?: string; allergens?: string }
 interface Menu { accent_color?: string; outlet_name: string; restaurant_name: string; currency: string; currency_symbol?: string; logo?: string; prices_include_tax: 0 | 1; ordering: boolean; categories: { category: string; items: Item[] }[] }
 
 export default function QrMenu() {
@@ -64,7 +64,12 @@ export default function QrMenu() {
                     {i.allergens && <p className="mt-0.5 text-xs text-mute">Contains {i.allergens}</p>}
                   </div>
                   <div className="flex w-24 shrink-0 flex-col items-center gap-2">
-                    {i.image && <img src={i.image} alt="" className="size-20 rounded-xl object-cover" />}
+                    {i.image && (
+                      <figure className="w-24">
+                        <img src={i.image} alt="" loading="lazy" className="size-24 rounded-xl object-cover" />
+                        {i.image_credit && <figcaption className="mt-0.5 line-clamp-2 text-center text-[9px] leading-tight text-mute">{i.image_credit}</figcaption>}
+                      </figure>
+                    )}
                     {menu.ordering && (cart[i.name]
                       ? <div className="flex items-center rounded-lg bg-ink text-paper">
                           <button aria-label="One less" className="p-2" onClick={() => bump(i.name, -1)}><Minus className="size-4" /></button>

@@ -4,6 +4,7 @@ import { call, errText, P } from "../lib/api"
 import { money, useVenue } from "../lib/venue"
 import { cn } from "../lib/cn"
 import { Button, Check, Field, Input, Select, Tag, useToast } from "../components/ui"
+import { LinkPicker } from "../components/LinkPicker"
 
 const PEP_MODES = ["Cash", "Card", "UPI", "Wallet", "Other"]
 
@@ -21,8 +22,6 @@ interface Status {
 }
 interface Options {
   erpnext: boolean; companies?: { name: string; default_currency: string }[]; company?: string
-  income_accounts?: string[]; tax_accounts?: string[]; cost_centers?: string[]; modes_of_payment?: string[]
-  customers?: string[]; items?: string[]
 }
 
 const opts = (list: string[] | undefined, blank = "Choose…") => [{ value: "", label: blank }, ...(list ?? []).map((v) => ({ value: v, label: v }))]
@@ -142,12 +141,12 @@ export default function Accounting() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Walk-in customer" hint="Every restaurant sale is invoiced to this customer.">
-            <Select value={v.customer ?? ""} onChange={(e) => set("customer", e.target.value)} options={opts(op?.customers)} />
+            <LinkPicker kind="customer" value={v.customer} onChange={(x) => set("customer", x)} placeholder="Search customers…" />
           </Field>
-          <Field label="Cost center"><Select value={v.cost_center ?? ""} onChange={(e) => set("cost_center", e.target.value)} options={opts(op?.cost_centers)} /></Field>
-          <Field label="Food & beverage income account"><Select value={v.income_account ?? ""} onChange={(e) => set("income_account", e.target.value)} options={opts(op?.income_accounts)} /></Field>
+          <Field label="Cost center"><LinkPicker kind="cost_center" company={v.company} value={v.cost_center} onChange={(x) => set("cost_center", x)} /></Field>
+          <Field label="Food & beverage income account"><LinkPicker kind="income_account" company={v.company} value={v.income_account} onChange={(x) => set("income_account", x)} placeholder="Search income accounts…" /></Field>
           <Field label="Service charge account" hint="Blank books service charge to the income account.">
-            <Select value={v.service_charge_account ?? ""} onChange={(e) => set("service_charge_account", e.target.value)} options={opts([...(op?.income_accounts ?? []), ...(op?.tax_accounts ?? [])], "Same as income")} />
+            <LinkPicker kind="service_account" company={v.company} value={v.service_charge_account} onChange={(x) => set("service_charge_account", x)} blankLabel="Same as income" />
           </Field>
         </div>
 
@@ -161,7 +160,7 @@ export default function Accounting() {
             </Field>
             {v.item_mode === "One item per dish"
               ? <Field label="Item group" hint="Dish items (non-stock, code PEP-MI-…) are created on first sale."><Input value={v.item_group ?? ""} onChange={(e) => set("item_group", e.target.value)} /></Field>
-              : <Field label="Sales item" hint="A non-stock Item."><Select value={v.sales_item ?? ""} onChange={(e) => set("sales_item", e.target.value)} options={opts(op?.items)} /></Field>}
+              : <Field label="Sales item" hint="A non-stock Item."><LinkPicker kind="item" value={v.sales_item} onChange={(x) => set("sales_item", x)} placeholder="Search items…" /></Field>}
           </div>
         </div>
 
@@ -171,10 +170,10 @@ export default function Accounting() {
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             {taxRows.map((r) => (
               <Field key={r.tax_label} label={`${r.tax_label} account`}>
-                <Select value={r.account} onChange={(e) => setTax(r.tax_label!, e.target.value)} options={opts(op?.tax_accounts)} />
+                <LinkPicker kind="tax_account" company={v.company} value={r.account} onChange={(x) => setTax(r.tax_label!, x)} />
               </Field>
             ))}
-            <Field label="Any other tax line"><Select value={v.default_tax_account ?? ""} onChange={(e) => set("default_tax_account", e.target.value)} options={opts(op?.tax_accounts, "None")} /></Field>
+            <Field label="Any other tax line"><LinkPicker kind="tax_account" company={v.company} value={v.default_tax_account} onChange={(x) => set("default_tax_account", x)} blankLabel="None" /></Field>
           </div>
         </div>
 
@@ -184,7 +183,7 @@ export default function Accounting() {
           <div className="mt-2 grid gap-3 sm:grid-cols-3">
             {PEP_MODES.map((m) => (
               <Field key={m} label={m}>
-                <Select value={modeOf(m)} onChange={(e) => setMode(m, e.target.value)} options={opts(op?.modes_of_payment, "Not used")} />
+                <LinkPicker kind="mode_of_payment" value={modeOf(m)} onChange={(x) => setMode(m, x)} blankLabel="Not used" />
               </Field>
             ))}
           </div>

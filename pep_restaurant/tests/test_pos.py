@@ -222,3 +222,84 @@ class TestPepPOS(TestCase):
 		                      csv_text="﻿item_name;price;category;prep_station;is_veg\nKulfi;90;Desserts;Kitchen;yes\n")
 		self.assertEqual((out["created"] + out["updated"], out["errors"]), (1, []))
 		self.assertEqual(frappe.db.get_value("Pep Menu Item", {"item_name": "Kulfi"}, "is_veg"), 1)
+
+	def test_ingredient_import(self):
+		from pep_restaurant.inventory import import_ingredients
+
+		csv_text = ("﻿ingredient_name;uom;category;cost_per_unit;opening_stock;par_level\n"
+		            "Imported Rice;kgs;Dry;22;25;8\n"
+		            "Imported Beer;Bottles;Bar;₵14;48;24\n"
+		            "Bad Unit;barrel;Dry;1;;\n"
+		            "Imported Rice;kg;Dry;23;;\n")
+		with self.assertRaises(frappe.ValidationError):  # stock columns need an outlet
+			import_ingredients(restaurant=REST, csv_text=csv_text)
+		out = import_ingredients(restaurant=REST, csv_text=csv_text, outlet=self.outlet)
+		self.assertEqual((out["created"], out["opening"]), (2, 2))
+		self.assertEqual({e["item"] for e in out["errors"]}, {"Bad Unit", "Imported Rice"})  # bad unit + duplicate
+		rice = frappe.db.get_value("Pep Ingredient", {"restaurant": REST, "ingredient_name": "Imported Rice"},
+		                           ["name", "uom", "cost_per_unit"], as_dict=True)
+		self.assertEqual((rice.uom, rice.cost_per_unit), ("kg", 22))
+		beer = frappe.db.get_value("Pep Ingredient", {"restaurant": REST, "ingredient_name": "Imported Beer"}, "uom")
+		self.assertEqual(beer, "bottle")
+		stock = lambda: frappe.db.get_value("Pep Ingredient Stock", f"{self.outlet}::{rice.name}",  # noqa: E731
+		                                   ["qty_on_hand", "par_level"])
+		self.assertEqual(stock(), (25, 8))
+		# re-importing the same file must not double the shelf
+		again = import_ingredients(restaurant=REST, csv_text=csv_text, outlet=self.outlet)
+		self.assertEqual((again["created"], again["updated"], again["opening"]), (0, 2, 0))
+		self.assertEqual(len(again["notes"]), 2)
+		self.assertEqual(stock(), (25, 8))
+		# a unit can't change once stock is recorded in the old one
+		bad = import_ingredients(restaurant=REST, csv_text="ingredient_name,uom\nImported Rice,g\n")
+		self.assertEqual(len(bad["errors"]), 1)
+		self.assertEqual(frappe.db.get_value("Pep Ingredient", rice.name, "uom"), "kg")
+
+	def test_menu_import_downloads_photos(self):
+		from unittest import mock
+
+		from pep_restaurant import menu, remote_image
+
+		png = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+		                    "1f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082")
+
+		class Resp:
+			def __init__(self, status=200, ctype="image/png", body=png, location=None):
+				self.status_code, self.headers = status, {"Content-Type": ctype}
+				if location:
+					self.headers["Location"] = location
+				self.is_redirect, self._body = bool(location), body
+
+			def iter_content(self, n):
+				yield self._body
+
+			def close(self):
+				pass
+
+		def fake_get(url, **kw):
+			if "redirect" in url:
+				return Resp(302, location="https://img.example.com/real.png")
+			if "html" in url:
+				return Resp(ctype="text/html", body=b"<html>")
+			return Resp()
+
+		public = [(2, 1, 6, "", ("93.184.216.34", 443))]
+		csv_text = ("item_name,price,image,image_credit\n"
+		            "Photo Dish,50,https://img.example.com/redirect.png?utm_source=x,\"Photo: A, CC BY 4.0\"\n"
+		            "Not An Image,60,https://img.example.com/page.html,\n")
+		with mock.patch("requests.get", side_effect=fake_get), mock.patch("socket.getaddrinfo", return_value=public):
+			out = menu.import_csv(outlet=self.outlet, csv_text=csv_text)
+		self.assertEqual((out["created"] + out["updated"], out["photos"], out["errors"]), (2, 1, []))
+		self.assertEqual(len(out["notes"]), 1)  # the HTML link is a note; the dish still imports
+		dish = frappe.db.get_value("Pep Menu Item", {"outlet": self.outlet, "item_name": "Photo Dish"},
+		                           ["name", "image", "image_credit"], as_dict=True)
+		self.assertTrue(dish.image.startswith("/files/"))
+		self.assertEqual(dish.image_credit, "Photo: A, CC BY 4.0")
+		self.assertTrue(frappe.db.exists("File", {"attached_to_name": dish.name, "file_url": dish.image}))
+		self.assertFalse(frappe.db.get_value("Pep Menu Item", {"item_name": "Not An Image"}, "image"))
+		# never fetch from the restaurant's own network
+		with mock.patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("192.168.1.10", 80))]):
+			with self.assertRaises(frappe.ValidationError):
+				remote_image.fetch("http://router.local/admin.png")
+		with mock.patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 80))]):
+			with self.assertRaises(frappe.ValidationError):
+				remote_image.fetch("http://localhost/x.png")

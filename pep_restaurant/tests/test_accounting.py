@@ -197,3 +197,23 @@ class TestPepAccounting(TestCase):
 			self._settings(income_account=self.vat)  # a liability is not income
 		with self.assertRaises(frappe.ValidationError):
 			self._settings(payment_modes=[{"pep_mode": "Wallet", "mode_of_payment": "Test MoMo"}])  # no Cash
+
+	def test_search_link(self):
+		for i in range(3):
+			if not frappe.db.exists("Customer", f"Zz Search {i}"):
+				frappe.get_doc({"doctype": "Customer", "customer_name": f"Zz Search {i}", "customer_type": "Individual",
+				                "customer_group": frappe.db.get_value("Customer Group", {"is_group": 0}),
+				                "territory": frappe.db.get_value("Territory", {"is_group": 0})}).insert()
+		hits = accounting.search_link(kind="customer", txt="walk")
+		self.assertEqual(hits[0]["value"], "Walk-in Customer")  # found however many customers exist
+		self.assertEqual(len(accounting.search_link(kind="customer", txt="Zz Search", limit=2)), 2)
+		income = [h["value"] for h in accounting.search_link(kind="income_account", company=self.company)]
+		self.assertTrue(income)
+		self.assertTrue(all(frappe.db.get_value("Account", a, "root_type") == "Income" for a in income))
+		self.assertNotIn(self.vat, [h["value"] for h in accounting.search_link(kind="income_account", txt="VAT",
+		                                                                        company=self.company)])
+		self.assertIn(self.vat, [h["value"] for h in accounting.search_link(kind="tax_account", txt="Test VAT",
+		                                                                     company=self.company)])
+		self.assertEqual(accounting.search_link(kind="income_account"), [])  # accounts need a company
+		with self.assertRaises(frappe.ValidationError):
+			accounting.search_link(kind="user")

@@ -23,6 +23,7 @@
   "allergens",
   "column_break_b",
   "image",
+  "image_credit",
   "section_recipe_sec",
   "recipe"
  ],
@@ -131,6 +132,12 @@
    "label": "Image"
   },
   {
+   "description": "Shown under the photo on the guest QR menu, e.g. \"Photo: Jane Doe, CC BY-SA 4.0\". Needed for most free-licence photos.",
+   "fieldname": "image_credit",
+   "fieldtype": "Data",
+   "label": "Photo credit"
+  },
+  {
    "fieldname": "section_recipe_sec",
    "fieldtype": "Section Break",
    "label": "Recipe"
@@ -145,7 +152,7 @@
  "image_field": "image",
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-17 19:30:00.000000",
+ "modified": "2026-10-17 23:30:00.000000",
  "modified_by": "Administrator",
  "module": "Pep Restaurant",
  "name": "Pep Menu Item",

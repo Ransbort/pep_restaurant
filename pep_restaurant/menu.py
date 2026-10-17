@@ -8,9 +8,10 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from pep_restaurant.authz import FLOOR_ROLES, KITCHEN_ROLES, require_roles
+from pep_restaurant.remote_image import attach_to_dish, is_url
 
 FIELDS = ("item_name", "category", "price", "course", "prep_station", "is_veg", "is_alcohol", "available",
-          "allergens", "description", "image", "sort_order")
+          "allergens", "description", "image", "image_credit", "sort_order")
 COURSES = ("Starter", "Main", "Dessert", "Drink")
 
 
@@ -88,8 +89,8 @@ def import_csv(outlet: str, csv_text: str, update_existing: int = 1):
 		headers["item_name"] = headers["name"]
 	if "item_name" not in headers or "price" not in headers:
 		frappe.throw(_("The CSV needs item_name and price columns."))
-	created = updated = 0
-	errors = []
+	created = updated = photos = 0
+	errors, notes = [], []
 	for i, raw in enumerate(reader, start=2):
 		row = {k: (raw.get(src) or "").strip() for k, src in headers.items()}
 		if not row.get("item_name"):
@@ -100,13 +101,24 @@ def import_csv(outlet: str, csv_text: str, update_existing: int = 1):
 			if existing and not cint(update_existing):
 				continue
 			extra = {k: row[k] for k in FIELDS if k in row and row[k] != "" and k not in ("item_name", "price")}
+			image_url = extra.pop("image") if is_url(extra.get("image")) else None
 			for b in ("is_veg", "is_alcohol", "available"):
 				if b in extra:
 					extra[b] = 1 if str(extra[b]).lower() in ("1", "y", "yes", "true", "veg") else 0
-			save_menu_item(outlet=outlet, item_name=row["item_name"], price=price, name=existing, **extra)
+			dish = save_menu_item(outlet=outlet, item_name=row["item_name"], price=price, name=existing, **extra)["name"]
 			updated += 1 if existing else 0
 			created += 0 if existing else 1
+			if image_url:
+				# the dish is saved either way; a photo that won't download is a note, not a failed row
+				frappe.db.savepoint("pep_img")
+				try:
+					attach_to_dish(dish, image_url)
+					photos += 1
+				except Exception as e:
+					frappe.db.rollback(save_point="pep_img")
+					frappe.clear_last_message()
+					notes.append({"line": i, "item": row.get("item_name"), "note": f"photo not added: {str(e)[:160]}"})
 		except Exception as e:
 			frappe.clear_last_message()
 			errors.append({"line": i, "item": row.get("item_name"), "error": str(e)[:200]})
-	return {"ok": True, "created": created, "updated": updated, "errors": errors}
+	return {"ok": True, "created": created, "updated": updated, "photos": photos, "errors": errors, "notes": notes}

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Plus, Trash2 } from "lucide-react"
+import { Download, Plus, Trash2, Upload } from "lucide-react"
+import { DropOverlay, useFileDrop } from "../components/FileDrop"
+import { downloadIngredientTemplate, IngredientImportModal } from "./IngredientImport"
 import { call, errText, P } from "../lib/api"
 import { money, useVenue } from "../lib/venue"
 import { R, useAuth } from "../lib/auth"
@@ -116,12 +118,28 @@ export function Ingredients({ restaurant, canEdit }: { restaurant: string; canEd
   const toast = useToast()
   const [rows, setRows] = useState<Ingredient[]>([])
   const [edit, setEdit] = useState<Partial<Ingredient> | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [dropped, setDropped] = useState<File | null>(null)
+  const pageDrop = useFileDrop((f) => { setDropped(f); setImporting(true) }, canEdit)
+  const blank = { uom: "kg", is_active: 1 as const, cost_per_unit: 0, ingredient_name: "" }
   const load = useCallback(() => call<Ingredient[]>(`${P}.inventory.ingredients`, { restaurant, active_only: 0 }).then(setRows).catch((e) => toast(errText(e), "bad")), [restaurant, toast])
   useEffect(() => { load() }, [load])
   return (
-    <>
-      {canEdit && <div className="mb-3 flex justify-end"><Button onClick={() => setEdit({ uom: "kg", is_active: 1, cost_per_unit: 0, ingredient_name: "" })}><Plus className="size-4" />Add ingredient</Button></div>}
-      {!rows.length && <Empty title="No ingredients yet">Add what your kitchen buys - paneer by the kg, beer by the bottle.</Empty>}
+    <div {...pageDrop.handlers} className="min-h-[60vh]">
+      {canEdit && (
+        <div className="mb-3 flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={downloadIngredientTemplate}><Download className="size-4" />CSV template</Button>
+          <Button variant="outline" onClick={() => setImporting(true)}><Upload className="size-4" />Import CSV</Button>
+          <Button onClick={() => setEdit(blank)}><Plus className="size-4" />Add ingredient</Button>
+        </div>
+      )}
+      {!rows.length && <Empty title="No ingredients yet" action={canEdit && (
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button onClick={() => setEdit(blank)}>Add the first ingredient</Button>
+          <Button variant="outline" onClick={() => setImporting(true)}><Upload className="size-4" />Import a list</Button>
+          <Button variant="ghost" onClick={downloadIngredientTemplate}><Download className="size-4" />Download CSV template</Button>
+        </div>)}>
+        Add what your kitchen buys - chicken by the kg, beer by the bottle - or fill in the CSV template and import the whole list, with opening stock.</Empty>}
       <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">
         {rows.map((r) => (
           <button key={r.name} disabled={!canEdit} onClick={() => setEdit(r)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-paper">
@@ -131,7 +149,10 @@ export function Ingredients({ restaurant, canEdit }: { restaurant: string; canEd
         ))}
       </div>
       {edit && <IngredientModal ing={edit} restaurant={restaurant} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />}
-    </>
+      {importing && <IngredientImportModal restaurant={restaurant} existing={rows} initialFile={dropped}
+        onClose={() => { setImporting(false); setDropped(null) }} onDone={() => { setImporting(false); setDropped(null); load() }} />}
+      {!importing && pageDrop.over && <DropOverlay label="Drop to import ingredients" />}
+    </div>
   )
 }
 

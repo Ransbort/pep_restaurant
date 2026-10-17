@@ -501,3 +501,114 @@ def wastage_report(restaurant: str, outlet: str | None = None, days: int = 30):
 		"written_off": written,
 		"written_off_value": flt(sum(w["value"] for w in written), 2),
 	}
+
+
+# ----------------------------------------------------------------- import
+
+UOMS = ("kg", "g", "L", "ml", "pc", "bottle", "packet", "dozen")
+_UOM_ALIASES = {
+	"kgs": "kg", "kilo": "kg", "kilos": "kg", "kilogram": "kg", "kilograms": "kg",
+	"gm": "g", "gms": "g", "gram": "g", "grams": "g",
+	"l": "L", "lt": "L", "ltr": "L", "litre": "L", "litres": "L", "liter": "L", "liters": "L",
+	"millilitre": "ml", "milliliter": "ml", "mls": "ml",
+	"pcs": "pc", "piece": "pc", "pieces": "pc", "each": "pc", "unit": "pc", "units": "pc", "nos": "pc",
+	"bottles": "bottle", "btl": "bottle", "packets": "packet", "pack": "packet", "packs": "packet", "pkt": "packet",
+	"doz": "dozen", "dozens": "dozen",
+}
+
+
+def _uom(v: str) -> str:
+	s = (v or "").strip()
+	if not s:
+		return "kg"
+	for u in UOMS:
+		if s.lower() == u.lower():
+			return u
+	if s.lower() in _UOM_ALIASES:
+		return _UOM_ALIASES[s.lower()]
+	frappe.throw(_("Unit \"{0}\" isn't one of: {1}.").format(s, ", ".join(UOMS)))
+
+
+@frappe.whitelist(methods=["POST"])
+@require_roles(*INVENTORY_WRITE)
+def import_ingredients(restaurant: str, csv_text: str, outlet: str | None = None, update_existing: int = 1):
+	"""Bulk-create ingredients from CSV: ingredient_name (required), uom,
+	category, cost_per_unit, is_active - and, for the chosen outlet,
+	opening_stock and par_level.
+
+	Opening stock is only ever the FIRST balance: an ingredient that already
+	has stock history at the outlet keeps it (re-importing the same file must
+	not double the shelf), and the row says so. Counting existing stock is a
+	stock take, which keeps the note and the variance."""
+	from pep_restaurant.csvutil import number, read_csv, yes
+
+	if outlet and frappe.db.get_value("Pep Outlet", outlet, "restaurant") != restaurant:
+		frappe.throw(_("That outlet belongs to another restaurant."))
+	headers, rows = read_csv(csv_text)
+	if "ingredient_name" not in headers and "name" in headers:
+		rows = [(i, {**r, "ingredient_name": r.get("name", "")}) for i, r in rows]
+		headers["ingredient_name"] = headers["name"]
+	if "ingredient_name" not in headers:
+		frappe.throw(_("The CSV needs an ingredient_name column."))
+	wants_stock = bool({"opening_stock", "par_level"} & set(headers))
+	if wants_stock and not outlet:
+		frappe.throw(_("Pick the outlet the opening stock and par levels belong to."))
+	created = updated = opening = 0
+	errors, notes = [], []
+	batch = uuid.uuid4().hex[:12]
+	seen = set()
+	for line, r in rows:
+		name = (r.get("ingredient_name") or "").strip()[:140]
+		if not name:
+			continue
+		if name.lower() in seen:
+			errors.append({"line": line, "item": name, "error": _("Listed twice in this file.")})
+			continue
+		seen.add(name.lower())
+		frappe.db.savepoint("pep_ing_row")
+		try:
+			existing = frappe.db.get_value("Pep Ingredient", {"restaurant": restaurant, "ingredient_name": name})
+			if existing and not cint(update_existing) and not wants_stock:
+				continue
+			cost = number(r.get("cost_per_unit"), "cost_per_unit")
+			qty = number(r.get("opening_stock"), "opening_stock")
+			par = number(r.get("par_level"), "par_level")
+			if (qty is not None and qty < 0) or (par is not None and par < 0) or (cost is not None and cost < 0):
+				frappe.throw(_("Quantities and costs can't be negative."))
+			if not existing or cint(update_existing):
+				doc = frappe.get_doc("Pep Ingredient", existing) if existing else frappe.new_doc("Pep Ingredient")
+				doc.restaurant = restaurant
+				doc.ingredient_name = name
+				if not existing or r.get("uom"):
+					if existing and _uom(r.get("uom")) != doc.uom and frappe.db.count(
+							"Pep Stock Ledger Entry", {"ingredient": existing}):
+						frappe.throw(_("Can't change the unit from {0} to {1}: this ingredient already has stock "
+						               "history in {0}.").format(doc.uom, _uom(r.get("uom"))))
+					doc.uom = _uom(r.get("uom"))
+				if r.get("category") or not existing:
+					doc.category = r.get("category") or None
+				if cost is not None:
+					doc.cost_per_unit = cost
+				if r.get("is_active") or not existing:
+					doc.is_active = yes(r.get("is_active")) if r.get("is_active") else 1
+				doc.save()
+				ing = doc.name
+				created += 0 if existing else 1
+				updated += 1 if existing else 0
+			else:
+				ing = existing
+			if outlet and qty:
+				if frappe.db.count("Pep Stock Ledger Entry", {"outlet": outlet, "ingredient": ing}):
+					notes.append({"line": line, "item": name,
+					              "note": _("already has stock here - opening stock skipped (use a stock take)")})
+				else:
+					_apply_move(restaurant, outlet, ing, qty, "Opening", batch_id=batch, note=_("Imported opening stock"))
+					opening += 1
+			if outlet and par is not None:
+				set_par_level(outlet=outlet, ingredient=ing, par_level=par)
+		except Exception as e:
+			frappe.db.rollback(save_point="pep_ing_row")
+			frappe.clear_last_message()
+			errors.append({"line": line, "item": name, "error": str(e)[:200]})
+	return {"ok": True, "created": created, "updated": updated, "opening": opening,
+	        "errors": errors, "notes": notes}

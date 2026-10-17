@@ -56,7 +56,9 @@ permission to see nothing at all.
   close with variance.
 - **reports**: sales, tenders, hourly sales, best sellers, kitchen speed,
   NC, discounts, voids and cancellations.
-- **qr**: printable table QR sheet. The codes are drawn in the browser.
+- **qr**: printable table QR sheet. The codes are drawn in the browser. Hover a
+  card, or tap its code on a touch screen, to print just that table's card on its
+  own page (A6).
 - **settings**: appearance per device (Light, Dark or Match device), whether
   the kitchen screen stays dark, and the restaurant's accent colour (ten
   presets or any hex) with a live preview. The accent is saved on the
@@ -88,7 +90,24 @@ station, so the grill cook only sees grill work.
 
 **Menu → Import CSV** offers a template download (with example rows that use
 your own stations) and a download of the current menu, so you can edit it in
-Excel or Google Sheets and re-import it. Files saved by Excel (UTF-8 with BOM,
+Excel or Google Sheets and re-import it.
+
+Photos can come in through the CSV as links: put the photo's web address in an
+`image` column and the photographer and licence in `image_credit`. The import
+downloads each photo onto the site and attaches it to its dish. The credit shows
+small under the photo on the guest QR menu, which most free licences (CC BY,
+CC BY-SA) require. A photo that won't download doesn't stop the import: the dish
+is still added, and the row is listed with the reason. The server only fetches
+JPEG, PNG, WebP or GIF images up to 5 MB from public addresses, never from
+private or local network addresses.
+
+**Recipes → Ingredients → Import CSV** works the same way for ingredients:
+`ingredient_name` (required), `uom`, `category`, `cost_per_unit`, `is_active`,
+and, for the outlet you pick in the dialog, `opening_stock` and `par_level`.
+Units such as "kgs", "litre" and "pcs" are understood. Opening stock is only set
+where the outlet has no stock history for that ingredient, so importing the same
+file twice never doubles the shelf. To correct a count, use a stock take. Both
+imports accept drag and drop onto the page or the dialog. Files saved by Excel (UTF-8 with BOM,
 or semicolon-separated) are accepted. Rows that fail are reported by line
 number; the rest still import.
 
@@ -100,7 +119,11 @@ Pep Cashier Transaction and Pep Cashier Session.
 
 Set it up in **Settings → Accounting (ERPNext)** (managers):
 
-1. Pick the company, then **Fill in suggested settings**. This creates a
+1. Pick the company, then **Fill in suggested settings**. Every picker (customer,
+   accounts, cost center, item, modes of payment) is a search box that queries
+   ERPNext as you type, so large customer lists and charts of accounts work. Each
+   picker only offers valid choices: income accounts for income, tax-type ledgers
+   for tax, and accounts of the chosen company. This creates a
    "Walk-in Customer" and a non-stock "Restaurant Sales" item if they're missing,
    and suggests the income account, cost center, a tax account per tax line
    (matched by name: VAT → "VAT - ABC"), and modes of payment that have an

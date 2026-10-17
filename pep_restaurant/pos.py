@@ -54,8 +54,8 @@ def outlets(restaurant: str):
 
 
 def _menu(outlet: str, guest: bool = False) -> list:
-	fields = ["name", "item_name", "category", "price", "is_veg", "is_alcohol", "image", "description", "allergens",
-	          "sort_order"]
+	fields = ["name", "item_name", "category", "price", "is_veg", "is_alcohol", "image", "image_credit", "description",
+	          "allergens", "sort_order"]
 	if not guest:
 		fields += ["course", "prep_station"]
 	items = frappe.get_all(

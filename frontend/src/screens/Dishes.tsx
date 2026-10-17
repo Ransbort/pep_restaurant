@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download, Plus, Upload } from "lucide-react"
-import { downloadText, isFileDrag, readCsvFile, slug, toCsv } from "../lib/csv"
+import { downloadText, readCsvFile, slug, toCsv } from "../lib/csv"
+import { DropOverlay, useFileDrop } from "../components/FileDrop"
 import { call, errText, P, uploadImage } from "../lib/api"
 import { money, useVenue } from "../lib/venue"
 import { R, useAuth } from "../lib/auth"
@@ -9,7 +10,7 @@ import { Button, Check, Empty, Field, Input, Modal, PageHead, Select, Tag, Texta
 
 interface Dish {
   name: string; item_name: string; category?: string; price: number; course: string; prep_station: string
-  is_veg: 0 | 1; is_alcohol: 0 | 1; available: 0 | 1; allergens?: string; description?: string; image?: string; sort_order: number
+  is_veg: 0 | 1; is_alcohol: 0 | 1; available: 0 | 1; allergens?: string; description?: string; image?: string; image_credit?: string; sort_order: number
 }
 const BLANK: Partial<Dish> = { item_name: "", price: 0, course: "Main", prep_station: "", is_veg: 0, is_alcohol: 0, available: 1, sort_order: 0 }
 
@@ -132,6 +133,11 @@ function DishModal({ dish, outlet, categories, stations, onClose, onSaved }: { d
             }} />
           </div>
         </Field>
+        {d.image && (
+          <Field label="Photo credit" hint="Shown small under the photo on the guest menu. Free-licence photos (CC BY, CC BY-SA) must credit the photographer.">
+            <Input value={d.image_credit ?? ""} onChange={(e) => set("image_credit", e.target.value)} placeholder="Photo: Jane Doe, CC BY-SA 4.0" />
+          </Field>
+        )}
       </div>
       <Field label="Description (shown on the guest QR menu)"><Textarea value={d.description ?? ""} onChange={(e) => set("description", e.target.value)} /></Field>
       <div className="flex flex-wrap gap-5">
@@ -155,6 +161,8 @@ const COLUMNS: [string, string, string][] = [
   ["available", "Optional", "yes / no - no adds it already off the menu."],
   ["allergens", "Optional", "Comma separated inside quotes: \"Nuts, Dairy\""],
   ["description", "Optional", "Shown on the guest QR menu."],
+  ["image", "Optional", "A link to the dish's photo (https://…jpg/png/webp, up to 5 MB). The import downloads it and attaches it to the dish."],
+  ["image_credit", "Optional", "Who took the photo and its licence - shown under it on the guest menu."],
   ["sort_order", "Optional", "Lower numbers show first in their category."],
 ]
 const HEADER = COLUMNS.map(([c]) => c)
@@ -164,10 +172,10 @@ const yn = (v: unknown) => (Number(v) ? "yes" : "no")
 function downloadTemplate(stations: string[]) {
   const st = (i: number) => stations[Math.min(i, stations.length - 1)] ?? "Kitchen"
   downloadText("pep-menu-template.csv", toCsv(HEADER, [
-    ["Masala Dosa", 160, "Breakfast", "Main", st(0), "yes", "no", "yes", "Gluten", "Crisp rice crepe, potato masala, chutneys", 1],
-    ["Chicken Wings", 320, "Starters", "Starter", stations.find((s) => /fry/i.test(s)) ?? st(1), "no", "no", "yes", "", "", 2],
-    ["Chocolate Brownie", 180, "Desserts", "Dessert", stations.find((s) => /cold|pastry/i.test(s)) ?? st(0), "yes", "no", "yes", "Nuts, Dairy, Gluten", "Warm, with ice cream", 3],
-    ["Fresh Lime Soda", 110, "Drinks", "Drink", stations.find((s) => /bar/i.test(s)) ?? st(0), "yes", "no", "yes", "", "", 4],
+    ["Masala Dosa", 160, "Breakfast", "Main", st(0), "yes", "no", "yes", "Gluten", "Crisp rice crepe, potato masala, chutneys", "", "", 1],
+    ["Chicken Wings", 320, "Starters", "Starter", stations.find((s) => /fry/i.test(s)) ?? st(1), "no", "no", "yes", "", "", "", "", 2],
+    ["Chocolate Brownie", 180, "Desserts", "Dessert", stations.find((s) => /cold|pastry/i.test(s)) ?? st(0), "yes", "no", "yes", "Nuts, Dairy, Gluten", "Warm, with ice cream", "", "", 3],
+    ["Fresh Lime Soda", 110, "Drinks", "Drink", stations.find((s) => /bar/i.test(s)) ?? st(0), "yes", "no", "yes", "", "", "", "", 4],
   ]))
 }
 
@@ -178,13 +186,13 @@ function ImportModal({ outlet, outletName, stations, dishes, initialFile, onClos
   const [fileName, setFileName] = useState("")
   const [update, setUpdate] = useState(true)
   const [guide, setGuide] = useState(false)
-  const [res, setRes] = useState<{ created: number; updated: number; errors: { line: number; item: string; error: string }[] } | null>(null)
+  const [res, setRes] = useState<{ created: number; updated: number; photos?: number; notes?: { line: number; item: string; note: string }[]; errors: { line: number; item: string; error: string }[] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState("")
   const template = () => downloadTemplate(stations)
   const exportMenu = () => downloadText(`${slug(outletName)}-menu.csv`, toCsv(HEADER, dishes.map((d) => [
     d.item_name, d.price, d.category, d.course, d.prep_station, yn(d.is_veg), yn(d.is_alcohol), yn(d.available),
-    d.allergens, d.description, d.sort_order,
+    d.allergens, d.description, d.image && !d.image.startsWith("http") ? location.origin + d.image : d.image, d.image_credit, d.sort_order,
   ])))
   const readFile = async (f?: File | null) => {
     if (!f) return
@@ -243,7 +251,8 @@ function ImportModal({ outlet, outletName, stations, dishes, initialFile, onClos
       </div>
       {res && (
         <div className="rounded-lg bg-paper p-3 text-sm">
-          <p className="font-semibold">{res.created} added, {res.updated} updated{res.errors.length ? `, ${res.errors.length} skipped` : ""}.</p>
+          <p className="font-semibold">{res.created} added, {res.updated} updated{res.photos ? `, ${res.photos} photo${res.photos === 1 ? "" : "s"} attached` : ""}{res.errors.length ? `, ${res.errors.length} skipped` : ""}.</p>
+          {res.notes?.map((n) => <p key={n.line} className="text-mute">Line {n.line} ({n.item}): {n.note}</p>)}
           {res.errors.map((e) => <p key={e.line} className="text-chili">Line {e.line} ({e.item}): {e.error}</p>)}
         </div>
       )}
@@ -255,41 +264,3 @@ function ImportModal({ outlet, outletName, stations, dishes, initialFile, onClos
 
 const canEditOf = (has: (...r: string[]) => boolean) => has(R.manager)
 
-/** Drag-and-drop for files. A depth counter keeps the highlight steady while
- *  the pointer crosses child elements (each fires its own enter/leave). */
-function useFileDrop(onFile: (f: File) => void, enabled: boolean) {
-  const [over, setOver] = useState(false)
-  const depth = useRef(0)
-  const handlers = enabled ? {
-    onDragEnter: (e: React.DragEvent) => {
-      if (!isFileDrag(e)) return
-      e.preventDefault(); e.stopPropagation(); depth.current += 1; setOver(true)
-    },
-    onDragOver: (e: React.DragEvent) => {
-      if (!isFileDrag(e)) return
-      e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"
-    },
-    onDragLeave: (e: React.DragEvent) => {
-      if (!isFileDrag(e)) return
-      e.stopPropagation()
-      depth.current = Math.max(0, depth.current - 1)
-      if (!depth.current) setOver(false)
-    },
-    onDrop: (e: React.DragEvent) => {
-      if (!isFileDrag(e)) return
-      e.preventDefault(); e.stopPropagation()
-      depth.current = 0; setOver(false)
-      const f = e.dataTransfer.files[0]
-      if (f) onFile(f)
-    },
-  } : {}
-  return { over, handlers }
-}
-
-function DropOverlay({ label }: { label: string }) {
-  return (
-    <div className="pointer-events-none fixed inset-3 z-[70] flex items-center justify-center rounded-2xl border-4 border-dashed border-brand bg-brand-soft/85">
-      <p className="flex items-center gap-2 rounded-xl bg-card px-5 py-3 text-lg font-bold shadow-xl"><Upload className="size-5" />{label}</p>
-    </div>
-  )
-}

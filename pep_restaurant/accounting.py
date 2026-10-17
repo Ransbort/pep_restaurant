@@ -477,20 +477,65 @@ def options(company: str | None = None):
 	company = company or (out["companies"][0].name if out["companies"] else None)
 	if not company:
 		return out
-	acc = lambda **f: frappe.get_all("Account", filters={"company": company, "is_group": 0, "disabled": 0, **f},  # noqa: E731
-	                                 pluck="name", order_by="name")
 	out.update({
 		"company": company,
-		"income_accounts": acc(root_type="Income"),
-		"tax_accounts": acc(root_type=("in", ["Liability", "Expense", "Asset"]), account_type=("in", ["Tax", "Chargeable", ""])),
-		"cost_centers": frappe.get_all("Cost Center", filters={"company": company, "is_group": 0}, pluck="name"),
-		"modes_of_payment": frappe.get_all("Mode of Payment", filters={"enabled": 1}, pluck="name", order_by="name"),
-		"customers": frappe.get_all("Customer", filters={"disabled": 0}, pluck="name", order_by="name", limit=200),
-		"items": frappe.get_all("Item", filters={"is_stock_item": 0, "disabled": 0, "is_sales_item": 1},
-		                        pluck="name", order_by="name", limit=200),
 		"defaults": frappe.get_cached_value("Company", company, ["default_income_account", "cost_center",
 		                                                       "default_currency"], as_dict=True),
 	})
+	return out
+
+
+# What each picker may offer, and how it's labelled. Kinds of account keep a
+# picker from offering, say, a bank account as the income account.
+_LINKS = {
+	"customer": ("Customer", {"disabled": 0}, ["customer_name"], "customer_name"),
+	"item": ("Item", {"disabled": 0, "is_stock_item": 0, "is_sales_item": 1}, ["item_name"], "item_name"),
+	"cost_center": ("Cost Center", {"is_group": 0}, ["cost_center_name"], None),
+	"mode_of_payment": ("Mode of Payment", {"enabled": 1}, [], None),
+	"income_account": ("Account", {"is_group": 0, "disabled": 0, "root_type": "Income"}, ["account_number"], None),
+	"service_account": ("Account", {"is_group": 0, "disabled": 0, "root_type": ("in", ["Income", "Liability"])},
+	                    ["account_number"], None),
+	"tax_account": ("Account", {"is_group": 0, "disabled": 0, "root_type": ("in", ["Liability", "Expense", "Asset"])},
+	                ["account_number"], None),
+}
+
+
+@frappe.whitelist()
+@require_roles()
+def search_link(kind: str, txt: str = "", company: str | None = None, limit: int = 20):
+	"""Type-ahead for the Settings pickers: matches the ID or the display
+	name, prefix matches first, limited to valid choices for that field
+	(company-scoped where it applies). Returns [{value, label}]."""
+	if not erpnext_installed():
+		return []
+	if kind not in _LINKS:
+		frappe.throw(_("Unknown picker {0}.").format(kind))
+	doctype, base, extra, label_field = _LINKS[kind]
+	filters = dict(base)
+	if doctype in ("Account", "Cost Center"):
+		if not company:
+			return []
+		filters["company"] = company
+	txt = (txt or "").strip()
+	limit = max(1, min(cint(limit) or 20, 50))
+	fields = ["name", *([label_field] if label_field else [])]
+	if not txt:
+		rows = frappe.get_all(doctype, filters=filters, fields=fields, order_by="modified desc", limit=limit)
+	else:
+		like = f"%{txt}%"
+		or_filters = {"name": ("like", like), **{f: ("like", like) for f in extra}}
+		rows = frappe.get_all(doctype, filters=filters, or_filters=or_filters, fields=fields, limit=limit * 3)
+		t = txt.lower()
+
+		def rank(r):
+			hay = [str(r.name).lower(), str(r.get(label_field) or "").lower()]
+			return (0 if any(h == t for h in hay) else 1 if any(h.startswith(t) for h in hay) else 2, str(r.name).lower())
+
+		rows = sorted(rows, key=rank)[:limit]
+	out = []
+	for r in rows:
+		label = r.get(label_field) if label_field else None
+		out.append({"value": r.name, "label": label if label and label != r.name else None})
 	return out
 
 
