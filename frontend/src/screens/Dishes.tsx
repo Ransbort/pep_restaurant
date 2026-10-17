@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download, Plus, Upload } from "lucide-react"
 import { downloadText, readCsvFile, slug, toCsv } from "../lib/csv"
 import { DropOverlay, useFileDrop } from "../components/FileDrop"
+import { Pager, savePageSize, savedPageSize } from "../components/Pager"
 import { call, errText, P, uploadImage } from "../lib/api"
 import { money, useVenue } from "../lib/venue"
 import { R, useAuth } from "../lib/auth"
@@ -25,6 +26,9 @@ export default function Dishes() {
   const [dropped, setDropped] = useState<File | null>(null)
   const pageDrop = useFileDrop((f) => { setDropped(f); setImporting(true) }, canEditOf(has))
   const [q, setQ] = useState("")
+  const [catFilter, setCatFilter] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(() => savedPageSize("dishes"))
   const canEdit = has(R.manager)
 
   const load = useCallback(() => {
@@ -32,12 +36,21 @@ export default function Dishes() {
   }, [outlet, toast])
   useEffect(load, [load])
 
+  // filter, then page through the list in menu order; headings are rebuilt
+  // for whatever falls on the current page
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    return rows.filter((r) => (!catFilter || (r.category || "Other") === catFilter)
+      && (!term || r.item_name.toLowerCase().includes(term) || (r.allergens ?? "").toLowerCase().includes(term)))
+  }, [rows, q, catFilter])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  useEffect(() => { setPage(1) }, [q, catFilter, outlet?.name, pageSize])
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
   const groups = useMemo(() => {
     const g: Record<string, Dish[]> = {}
-    rows.filter((r) => !q || r.item_name.toLowerCase().includes(q.toLowerCase()))
-      .forEach((r) => (g[r.category || "Other"] ??= []).push(r))
+    filtered.slice((page - 1) * pageSize, page * pageSize).forEach((r) => (g[r.category || "Other"] ??= []).push(r))
     return Object.entries(g)
-  }, [rows, q])
+  }, [filtered, page, pageSize])
   const categories = useMemo(() => [...new Set(rows.map((r) => r.category).filter(Boolean))] as string[], [rows])
 
   const toggle = async (d: Dish) => {
@@ -57,7 +70,15 @@ export default function Dishes() {
           <Button variant="outline" onClick={() => setImporting(true)}><Upload className="size-4" />Import CSV</Button>
           <Button onClick={() => setEdit({ ...BLANK })}><Plus className="size-4" />Add dish</Button>
         </>} />
-      <Input placeholder="Find a dish" value={q} onChange={(e) => setQ(e.target.value)} className="mb-4 max-w-xs" />
+      {rows.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Input placeholder="Find a dish" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
+          <Select className="w-auto min-w-44" value={catFilter} onChange={(e) => setCatFilter(e.target.value)}
+            options={[{ value: "", label: `All categories (${rows.length})` },
+              ...[...new Set(rows.map((r) => r.category || "Other"))].map((c) => ({ value: c, label: `${c} (${rows.filter((r) => (r.category || "Other") === c).length})` }))]} />
+        </div>
+      )}
+      {rows.length > 0 && !filtered.length && <Empty title="No dishes match">Try another search or category.</Empty>}
       {!rows.length && <Empty title="This menu is empty" action={canEdit && (
         <div className="flex flex-wrap justify-center gap-2">
           <Button onClick={() => setEdit({ ...BLANK })}>Add the first dish</Button>
@@ -89,6 +110,10 @@ export default function Dishes() {
           </section>
         ))}
       </div>
+      {filtered.length > 0 && (
+        <Pager page={page} pageSize={pageSize} total={filtered.length} noun="dishes" onPage={(p) => { setPage(p); document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" }) }}
+          onPageSize={(n) => { setPageSize(n); savePageSize("dishes", n) }} />
+      )}
       {edit && <DishModal dish={edit} outlet={outlet.name} categories={categories} stations={stations} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />}
       {importing && <ImportModal outlet={outlet.name} outletName={outlet.outlet_name} stations={stations} dishes={rows} initialFile={dropped}
         onClose={() => { setImporting(false); setDropped(null) }} onDone={() => { setImporting(false); setDropped(null); load() }} />}

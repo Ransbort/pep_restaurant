@@ -321,7 +321,7 @@ export default function Till() {
             {groups.map((g) => (
               <section key={g.category || "_"} className="mb-4 last:mb-0">
                 {g.category && <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-mute">{g.category}</h3>}
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-2">
                   {g.items.map((m) => (
                     <DishTile key={m.name} m={m} disabled={closed} onAdd={() => add(m)}
                       inCart={draft.filter((d) => d.menu_item === m.name).reduce((n, d) => n + d.qty, 0)} />
