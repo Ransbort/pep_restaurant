@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download, Plus, Trash2, Upload } from "lucide-react"
 import { DropOverlay, useFileDrop } from "../components/FileDrop"
+import { Pager, usePaged } from "../components/Pager"
 import { downloadIngredientTemplate, IngredientImportModal } from "./IngredientImport"
 import { call, errText, P } from "../lib/api"
 import { money, useVenue } from "../lib/venue"
@@ -39,10 +40,17 @@ function DishList({ restaurant, canEdit }: { restaurant: string; canEdit: boolea
   const [missing, setMissing] = useState(false)
   const load = useCallback(() => call<DishRow[]>(`${P}.inventory.recipe_overview`, { restaurant }).then(setRows).catch((e) => toast(errText(e), "bad")), [restaurant, toast])
   useEffect(() => { load() }, [load])
-  const shown = rows.filter((r) => !missing || !r.lines)
+  const [q, setQ] = useState("")
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase()
+    return rows.filter((r) => (!missing || !r.lines)
+      && (!t || r.item_name.toLowerCase().includes(t) || (r.category ?? "").toLowerCase().includes(t)))
+  }, [rows, missing, q])
+  const { slice, pager } = usePaged(shown, "recipes", `${q}|${missing}|${restaurant}`)
   return (
     <>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Input placeholder="Find a dish" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
         <Check label={`Only dishes without a recipe (${rows.filter((r) => !r.lines).length})`} checked={missing} onChange={setMissing} />
       </div>
       {!rows.length && <Empty title="No dishes yet">Add dishes in Menu, then give them recipes here.</Empty>}
@@ -52,7 +60,7 @@ function DishList({ restaurant, canEdit }: { restaurant: string; canEdit: boolea
             <tr><th className="px-4 py-2">Dish</th><th className="hidden px-4 py-2 sm:table-cell">Outlet</th><th className="px-4 py-2 text-right">Price</th><th className="px-4 py-2 text-right">Food cost</th></tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {shown.map((r) => (
+            {slice.map((r) => (
               <tr key={r.name} className="cursor-pointer hover:bg-paper" onClick={() => setOpen(r.name)}>
                 <td className="px-4 py-2.5"><p className="font-semibold">{r.item_name}</p><p className="text-xs text-mute">{r.lines ? `${r.lines} ingredient${r.lines === 1 ? "" : "s"}` : "No recipe"}</p></td>
                 <td className="hidden px-4 py-2.5 text-mute sm:table-cell">{r.outlet_name}</td>
@@ -62,7 +70,9 @@ function DishList({ restaurant, canEdit }: { restaurant: string; canEdit: boolea
             ))}
           </tbody>
         </table>
+        {rows.length > 0 && !shown.length && <p className="px-4 py-6 text-center text-sm text-mute">No dishes match.</p>}
       </div>
+      {shown.length > 0 && <Pager {...pager} noun="dishes" />}
       {open && <RecipeModal menuItem={open} restaurant={restaurant} canEdit={canEdit} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); load() }} />}
     </>
   )
@@ -124,13 +134,22 @@ export function Ingredients({ restaurant, canEdit }: { restaurant: string; canEd
   const blank = { uom: "kg", is_active: 1 as const, cost_per_unit: 0, ingredient_name: "" }
   const load = useCallback(() => call<Ingredient[]>(`${P}.inventory.ingredients`, { restaurant, active_only: 0 }).then(setRows).catch((e) => toast(errText(e), "bad")), [restaurant, toast])
   useEffect(() => { load() }, [load])
+  const [q, setQ] = useState("")
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase()
+    return rows.filter((r) => !t || r.ingredient_name.toLowerCase().includes(t) || (r.category ?? "").toLowerCase().includes(t))
+  }, [rows, q])
+  const { slice, pager } = usePaged(shown, "ingredients", `${q}|${restaurant}`)
   return (
     <div {...pageDrop.handlers} className="min-h-[60vh]">
-      {canEdit && (
-        <div className="mb-3 flex flex-wrap justify-end gap-2">
+      {(canEdit || rows.length > 0) && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {rows.length > 0 && <Input placeholder="Find an ingredient" value={q} onChange={(e) => setQ(e.target.value)} className="mr-auto max-w-xs" />}
+          {canEdit && <>
           <Button variant="ghost" onClick={downloadIngredientTemplate}><Download className="size-4" />CSV template</Button>
           <Button variant="outline" onClick={() => setImporting(true)}><Upload className="size-4" />Import CSV</Button>
           <Button onClick={() => setEdit(blank)}><Plus className="size-4" />Add ingredient</Button>
+          </>}
         </div>
       )}
       {!rows.length && <Empty title="No ingredients yet" action={canEdit && (
@@ -141,13 +160,15 @@ export function Ingredients({ restaurant, canEdit }: { restaurant: string; canEd
         </div>)}>
         Add what your kitchen buys - chicken by the kg, beer by the bottle - or fill in the CSV template and import the whole list, with opening stock.</Empty>}
       <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-card">
-        {rows.map((r) => (
+        {rows.length > 0 && !shown.length && <p className="px-4 py-6 text-center text-sm text-mute">No ingredients match.</p>}
+        {slice.map((r) => (
           <button key={r.name} disabled={!canEdit} onClick={() => setEdit(r)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-paper">
             <span className="flex-1"><span className={cn("font-semibold", !r.is_active && "text-mute line-through")}>{r.ingredient_name}</span><span className="block text-xs text-mute">{r.category || "Uncategorised"}</span></span>
             <span className="num text-sm">{money(r.cost_per_unit)} / {r.uom}</span>
           </button>
         ))}
       </div>
+      {shown.length > 0 && <Pager {...pager} noun="ingredients" />}
       {edit && <IngredientModal ing={edit} restaurant={restaurant} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />}
       {importing && <IngredientImportModal restaurant={restaurant} existing={rows} initialFile={dropped}
         onClose={() => { setImporting(false); setDropped(null) }} onDone={() => { setImporting(false); setDropped(null); load() }} />}

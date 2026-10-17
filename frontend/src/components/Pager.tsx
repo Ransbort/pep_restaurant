@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "../lib/cn"
 
@@ -20,7 +21,9 @@ function pages(current: number, count: number): (number | "gap")[] {
   const list = [...want].sort((a, b) => a - b)
   const out: (number | "gap")[] = []
   list.forEach((p, i) => {
-    if (i && p - list[i - 1] > 1) out.push("gap")
+    // a gap of exactly one page shows that page; "…" only stands in for two or more
+    if (i && p - list[i - 1] === 2) out.push(p - 1)
+    else if (i && p - list[i - 1] > 2) out.push("gap")
     out.push(p)
   })
   return out
@@ -61,4 +64,20 @@ export function Pager({ page, pageSize, total, onPage, onPageSize, noun = "items
       )}
     </nav>
   )
+}
+
+/** Paging state for a client-side list. Goes back to page 1 when `resetKey`
+ *  changes (a new search or filter) and never sits past the last page. */
+export function usePaged<T>(items: T[], key: string, resetKey: unknown) {
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSizeState] = useState(() => savedPageSize(key))
+  const count = Math.max(1, Math.ceil(items.length / pageSize))
+  useEffect(() => { setPage(1) }, [resetKey, pageSize])
+  useEffect(() => { if (page > count) setPage(count) }, [page, count])
+  const go = (p: number) => { setPage(p); document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" }) }
+  return {
+    slice: items.slice((page - 1) * pageSize, page * pageSize),
+    pager: { page, pageSize, total: items.length, onPage: go,
+             onPageSize: (n: number) => { setPageSizeState(n); savePageSize(key, n) } },
+  }
 }
