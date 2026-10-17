@@ -1,8 +1,8 @@
 """Post restaurant sales to ERPNext as Sales Invoices.
 
 Optional: does nothing unless ERPNext is installed on the site AND the
-restaurant's Pep Accounting Settings are enabled. Pep's own records (Pep
-Order, Pep Cashier Transaction, Pep Cashier Session) stay the source of
+restaurant's Restaurant Accounting Settings are enabled. The app's own records
+(Restaurant Order, Restaurant Cashier Transaction, Restaurant Cashier Session) stay the source of
 truth; ERPNext gets a faithful summary for the books.
 
 Two posting modes:
@@ -18,7 +18,7 @@ the cash/card receipt in one document. NC (complimentary) bills, cancelled
 bills and bills paid before the settings' start date are never posted.
 
 Money is reproduced exactly: line revenue, service charge and each tax
-line are taken from Pep's own figures (taxes as "Actual" charges), so the
+line are taken from the till's own figures (taxes as "Actual" charges), so the
 invoice's grand total equals what the till collected, to the cent, whether
 menu prices include tax or not.
 
@@ -37,7 +37,7 @@ from frappe.utils import add_days, cint, flt, get_datetime, getdate, nowdate
 
 from pep_restaurant.authz import require_roles
 
-SETTINGS = "Pep Accounting Settings"
+SETTINGS = "Restaurant Accounting Settings"
 
 
 def erpnext_installed() -> bool:
@@ -59,9 +59,9 @@ def on_bill_paid(order: str, restaurant: str):
 	"""Called by pos.pay_order. Per-bill mode posts this bill in the
 	background; per-shift mode just marks it Pending for the shift close."""
 	s = settings_for(restaurant)
-	if not s or not _in_scope(s, frappe.db.get_value("Pep Order", order, "paid_at")):
+	if not s or not _in_scope(s, frappe.db.get_value("Restaurant Order", order, "paid_at")):
 		return
-	frappe.db.set_value("Pep Order", order, {"erp_status": "Pending", "erp_error": None}, update_modified=False)
+	frappe.db.set_value("Restaurant Order", order, {"erp_status": "Pending", "erp_error": None}, update_modified=False)
 	if s.posting_mode == "Per bill":
 		frappe.enqueue("pep_restaurant.accounting.post_bill", order=order, queue="short",
 		               enqueue_after_commit=True, job_id=f"pep-post-{order}", deduplicate=True)
@@ -71,7 +71,7 @@ def on_shift_closed(session: str, restaurant: str):
 	s = settings_for(restaurant)
 	if not s or s.posting_mode != "Per shift":
 		return
-	frappe.db.set_value("Pep Cashier Session", session, {"erp_status": "Pending", "erp_error": None},
+	frappe.db.set_value("Restaurant Cashier Session", session, {"erp_status": "Pending", "erp_error": None},
 	                    update_modified=False)
 	frappe.enqueue("pep_restaurant.accounting.post_shift", session=session, queue="short",
 	               enqueue_after_commit=True, job_id=f"pep-post-{session}", deduplicate=True)
@@ -85,36 +85,36 @@ def _in_scope(s, paid_at) -> bool:
 
 
 def post_bill(order: str) -> str | None:
-	doc = frappe.get_doc("Pep Order", order)
+	doc = frappe.get_doc("Restaurant Order", order)
 	s = settings_for(doc.restaurant)
 	if not s:
 		return None
 	if not _postable(doc, s):
-		frappe.db.set_value("Pep Order", order, "erp_status", "Skipped", update_modified=False)
+		frappe.db.set_value("Restaurant Order", order, "erp_status", "Skipped", update_modified=False)
 		return None
 	if doc.erp_status == "Posted" and doc.erp_invoice:
 		return doc.erp_invoice
 	return _post(s, [doc], posting_date=getdate(doc.paid_at),
-	             remarks=f"Pep Restaurant bill {doc.name} ({_label(doc)})")
+	             remarks=f"Restaurant bill {doc.name} ({_label(doc)})")
 
 
 def post_shift(session: str) -> str | None:
-	sess = frappe.get_doc("Pep Cashier Session", session)
+	sess = frappe.get_doc("Restaurant Cashier Session", session)
 	s = settings_for(sess.restaurant)
 	if not s:
 		return None
 	if sess.erp_status == "Posted" and sess.erp_invoice:
 		return sess.erp_invoice
-	orders = [frappe.get_doc("Pep Order", n) for n in frappe.get_all(
-		"Pep Order", filters={"session": session, "paid": 1}, pluck="name", order_by="paid_at asc")]
+	orders = [frappe.get_doc("Restaurant Order", n) for n in frappe.get_all(
+		"Restaurant Order", filters={"session": session, "paid": 1}, pluck="name", order_by="paid_at asc")]
 	orders = [o for o in orders if _postable(o, s) and o.erp_status != "Posted"]
 	if not orders:
-		frappe.db.set_value("Pep Cashier Session", session, {"erp_status": "Skipped", "erp_error": None},
+		frappe.db.set_value("Restaurant Cashier Session", session, {"erp_status": "Skipped", "erp_error": None},
 		                    update_modified=False)
 		return None
 	when = getdate(sess.closed_at or sess.opened_at)
 	return _post(s, orders, posting_date=when, session=sess,
-	             remarks=f"Pep Restaurant shift {sess.name} - {sess.user} - {len(orders)} bill(s)")
+	             remarks=f"Restaurant shift {sess.name} - {sess.user} - {len(orders)} bill(s)")
 
 
 def post_day(restaurant: str, day) -> str | None:
@@ -123,14 +123,14 @@ def post_day(restaurant: str, day) -> str | None:
 	if not s:
 		return None
 	day = getdate(day)
-	names = frappe.get_all("Pep Order", filters={
+	names = frappe.get_all("Restaurant Order", filters={
 		"restaurant": restaurant, "paid": 1, "session": ("is", "not set"),
 		"paid_at": ("between", [f"{day} 00:00:00", f"{day} 23:59:59"]),
 		"erp_status": ("!=", "Posted")}, pluck="name", order_by="paid_at asc")
-	orders = [o for o in (frappe.get_doc("Pep Order", n) for n in names) if _postable(o, s)]
+	orders = [o for o in (frappe.get_doc("Restaurant Order", n) for n in names) if _postable(o, s)]
 	if not orders:
 		return None
-	return _post(s, orders, posting_date=day, remarks=f"Pep Restaurant sales without a shift, {day}")
+	return _post(s, orders, posting_date=day, remarks=f"Restaurant sales without a shift, {day}")
 
 
 def _postable(o, s) -> bool:
@@ -158,17 +158,17 @@ def _post(s, orders, posting_date, remarks: str, session=None) -> str | None:
 		frappe.db.rollback(save_point="pep_post")
 		msg = _clean(e)
 		for n in names:
-			frappe.db.set_value("Pep Order", n, {"erp_status": "Failed", "erp_error": msg}, update_modified=False)
+			frappe.db.set_value("Restaurant Order", n, {"erp_status": "Failed", "erp_error": msg}, update_modified=False)
 		if session:
-			frappe.db.set_value("Pep Cashier Session", session.name, {"erp_status": "Failed", "erp_error": msg},
+			frappe.db.set_value("Restaurant Cashier Session", session.name, {"erp_status": "Failed", "erp_error": msg},
 			                    update_modified=False)
-		frappe.log_error(title=f"Pep Restaurant: posting {names[0]}{' +' if len(names) > 1 else ''} failed")
+		frappe.log_error(title=f"Restaurant: posting {names[0]}{' +' if len(names) > 1 else ''} failed")
 		return None
 	for n in names:
-		frappe.db.set_value("Pep Order", n, {"erp_status": "Posted", "erp_invoice": si.name, "erp_error": None},
+		frappe.db.set_value("Restaurant Order", n, {"erp_status": "Posted", "erp_invoice": si.name, "erp_error": None},
 		                    update_modified=False)
 	if session:
-		frappe.db.set_value("Pep Cashier Session", session.name,
+		frappe.db.set_value("Restaurant Cashier Session", session.name,
 		                    {"erp_status": "Posted", "erp_invoice": si.name, "erp_error": None},
 		                    update_modified=False)
 	return si.name
@@ -198,10 +198,10 @@ def _split(total: float, weights: list[float]) -> list[float]:
 
 
 def order_breakdown(o) -> dict:
-	"""What one bill is worth to the books, from Pep's own figures:
+	"""What one bill is worth to the books, from the till's own figures:
 	revenue per line (after discount, before tax), service charge before
 	tax, and tax per tax line. revenue + service + tax == grand_total."""
-	from pep_restaurant.pep_restaurant.doctype.pep_restaurant.pep_restaurant import parse_tax_split
+	from pep_restaurant.restaurant.doctype.restaurant.restaurant import parse_tax_split
 
 	grand, tax = flt(o.grand_total, 2), flt(o.tax_amount, 2)
 	net, sc = flt(o.order_total), flt(o.service_charge)
@@ -210,7 +210,7 @@ def order_breakdown(o) -> dict:
 	food = flt(ex_tax - service, 2)
 	live = [it for it in o.items if not it.voided and flt(it.amount)]
 	lines = list(zip(live, _split(food, [flt(it.amount) for it in live]), strict=True))
-	rest = frappe.get_cached_doc("Pep Restaurant", o.restaurant)
+	rest = frappe.get_cached_doc("Restaurant", o.restaurant)
 	split = parse_tax_split(rest.tax_split) or [(rest.tax_label or "Tax", 1.0)]
 	taxes = dict(zip([lbl for lbl, _s in split], _split(tax, [sh for _l, sh in split]), strict=True))
 	tenders = json.loads(o.payments_json or "[]") or [{"mode": o.payment_mode, "amount": grand}]
@@ -222,8 +222,8 @@ def _dish_item(s, menu_item: str) -> str:
 	code = f"PEP-{menu_item}"
 	if frappe.db.exists("Item", code):
 		return code
-	mi = frappe.db.get_value("Pep Menu Item", menu_item, ["item_name", "description"], as_dict=True) or {}
-	group = s.item_group or "Pep Restaurant"
+	mi = frappe.db.get_value("Restaurant Menu Item", menu_item, ["item_name", "description"], as_dict=True) or {}
+	group = s.item_group or "Restaurant"
 	if not frappe.db.exists("Item Group", group):
 		root = frappe.db.get_value("Item Group", {"is_group": 1, "parent_item_group": ("in", ["", None])}, "name") \
 			or "All Item Groups"
@@ -241,7 +241,7 @@ def build_invoice(s, orders, posting_date, remarks: str):
 	"""An unsaved, paid Sales Invoice summarising these bills."""
 	validate_settings(s)
 	company_currency = frappe.get_cached_value("Company", s.company, "default_currency")
-	currency = frappe.db.get_value("Pep Restaurant", s.restaurant, "currency")
+	currency = frappe.db.get_value("Restaurant", s.restaurant, "currency")
 	if currency != company_currency:
 		frappe.throw(_("The restaurant bills in {0} but {1}'s currency is {2}.").format(
 			currency, s.company, company_currency))
@@ -313,7 +313,7 @@ def build_invoice(s, orders, posting_date, remarks: str):
 	for mode, amt in tenders.items():
 		mop = mop_map.get(mode)
 		if not mop:
-			frappe.throw(_("Map the Pep payment mode {0} to an ERPNext Mode of Payment in Settings.").format(mode))
+			frappe.throw(_("Map the payment mode {0} to an ERPNext Mode of Payment in Settings.").format(mode))
 		account = mop_account(mop, s.company)
 		if not account:
 			frappe.throw(_("Mode of Payment {0} has no account for {1}.").format(mop, s.company))
@@ -411,21 +411,21 @@ def post_pending(restaurant: str, include_today: bool = True) -> dict:
 	if s.start_from:
 		base["paid_at"] = (">=", f"{s.start_from} 00:00:00")
 	if s.posting_mode == "Per bill":
-		for n in frappe.get_all("Pep Order", filters=base, pluck="name", order_by="paid_at asc", limit=500):
+		for n in frappe.get_all("Restaurant Order", filters=base, pluck="name", order_by="paid_at asc", limit=500):
 			r = post_bill(n)
 			posted.append(r) if r else None
 			failed += 0 if r else 1
 	else:
-		for sess in frappe.get_all("Pep Cashier Session", filters={
+		for sess in frappe.get_all("Restaurant Cashier Session", filters={
 			"restaurant": restaurant, "status": "Closed", "erp_status": ("in", ["", None, "Pending", "Failed"]),
 		}, pluck="name", order_by="closed_at asc", limit=200):
-			if not frappe.db.count("Pep Order", {**base, "session": sess}):
+			if not frappe.db.count("Restaurant Order", {**base, "session": sess}):
 				continue
 			r = post_shift(sess)
 			posted.append(r) if r else None
 			failed += 0 if r else 1
 		days = {getdate(p) for p in frappe.get_all(
-			"Pep Order", filters={**base, "session": ("is", "not set")}, pluck="paid_at", limit=5000) if p}
+			"Restaurant Order", filters={**base, "session": ("is", "not set")}, pluck="paid_at", limit=5000) if p}
 		for day in sorted(days):
 			if day >= getdate(nowdate()) and not include_today:
 				continue
@@ -438,9 +438,9 @@ def post_pending(restaurant: str, include_today: bool = True) -> dict:
 @require_roles()
 def status(restaurant: str):
 	"""For Settings → Accounting: is ERPNext here, what's pending, what failed."""
-	from pep_restaurant.pep_restaurant.doctype.pep_restaurant.pep_restaurant import parse_tax_split
+	from pep_restaurant.restaurant.doctype.restaurant.restaurant import parse_tax_split
 
-	rest = frappe.get_cached_doc("Pep Restaurant", restaurant)
+	rest = frappe.get_cached_doc("Restaurant", restaurant)
 	out = {"erpnext": erpnext_installed(), "settings": None, "pending": 0, "failed": [], "recent": [],
 	       "tax_labels": [lbl for lbl, _s in parse_tax_split(rest.tax_split)] or [rest.tax_label or "Tax"],
 	       "currency": rest.currency}
@@ -448,14 +448,14 @@ def status(restaurant: str):
 		return out
 	if frappe.db.exists(SETTINGS, restaurant):
 		out["settings"] = frappe.get_doc(SETTINGS, restaurant).as_dict()
-	out["pending"] = frappe.db.count("Pep Order", {"restaurant": restaurant, "erp_status": "Pending"})
+	out["pending"] = frappe.db.count("Restaurant Order", {"restaurant": restaurant, "erp_status": "Pending"})
 	out["failed"] = frappe.get_all(
-		"Pep Order", filters={"restaurant": restaurant, "erp_status": "Failed"},
+		"Restaurant Order", filters={"restaurant": restaurant, "erp_status": "Failed"},
 		fields=["name", "paid_at", "grand_total", "erp_error", "session"], order_by="paid_at desc", limit=20)
 	out["failed_shifts"] = frappe.get_all(
-		"Pep Cashier Session", filters={"restaurant": restaurant, "erp_status": "Failed"},
+		"Restaurant Cashier Session", filters={"restaurant": restaurant, "erp_status": "Failed"},
 		fields=["name", "closed_at", "erp_error"], order_by="closed_at desc", limit=10)
-	inv = frappe.get_all("Pep Order", filters={"restaurant": restaurant, "erp_status": "Posted"},
+	inv = frappe.get_all("Restaurant Order", filters={"restaurant": restaurant, "erp_status": "Posted"},
 	                     fields=["erp_invoice", "paid_at", "grand_total"], order_by="paid_at desc", limit=200)
 	recent: dict[str, dict] = {}
 	for r in inv:
@@ -582,12 +582,12 @@ def quick_setup(restaurant: str, company: str):
 		group = frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
 		frappe.get_doc({"doctype": "Item", "item_code": "Restaurant Sales", "item_name": "Restaurant Sales",
 		                "item_group": group, "stock_uom": "Nos", "is_stock_item": 0, "is_sales_item": 1,
-		                "description": "Food and beverage sales from Pep Restaurant"}).insert(ignore_permissions=True)
+		                "description": "Food and beverage sales from Restaurant"}).insert(ignore_permissions=True)
 	c = frappe.get_cached_value("Company", company, ["default_income_account", "cost_center", "default_cash_account"],
 	                            as_dict=True)
-	from pep_restaurant.pep_restaurant.doctype.pep_restaurant.pep_restaurant import parse_tax_split
+	from pep_restaurant.restaurant.doctype.restaurant.restaurant import parse_tax_split
 
-	rest = frappe.get_cached_doc("Pep Restaurant", restaurant)
+	rest = frappe.get_cached_doc("Restaurant", restaurant)
 	labels = [lbl for lbl, _s in parse_tax_split(rest.tax_split)] or [rest.tax_label or "Tax"]
 	tax_accts = frappe.get_all("Account", filters={"company": company, "account_type": "Tax", "is_group": 0,
 	                                               "disabled": 0}, fields=["name", "account_name"], order_by="name")

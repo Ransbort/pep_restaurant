@@ -14,7 +14,7 @@ except ImportError:  # Frappe v14
 from pep_restaurant import cashier, inventory, pos
 from pep_restaurant.public_api import qr_order
 
-REST = "_Test Pep Restaurant"
+REST = "_Test Restaurant"
 
 
 def _ensure_user(email, role=None):
@@ -33,21 +33,21 @@ class TestPepPOS(TestCase):
 		from pep_restaurant.install import ensure_roles
 
 		ensure_roles()
-		if not frappe.db.exists("Pep Restaurant", REST):
-			frappe.get_doc({"doctype": "Pep Restaurant", "restaurant_name": REST, "currency": "INR",
+		if not frappe.db.exists("Restaurant", REST):
+			frappe.get_doc({"doctype": "Restaurant", "restaurant_name": REST, "currency": "INR",
 			                "tax_label": "GST", "tax_split": "CGST:50\nSGST:50",
 			                "require_open_session": 1}).insert()
-		cls.outlet = frappe.db.get_value("Pep Outlet", {"restaurant": REST, "outlet_name": "Test Hall"})
+		cls.outlet = frappe.db.get_value("Restaurant Outlet", {"restaurant": REST, "outlet_name": "Test Hall"})
 		if not cls.outlet:
-			cls.outlet = frappe.get_doc({"doctype": "Pep Outlet", "restaurant": REST, "outlet_name": "Test Hall",
+			cls.outlet = frappe.get_doc({"doctype": "Restaurant Outlet", "restaurant": REST, "outlet_name": "Test Hall",
 			                             "tax_rate": 5, "service_charge_rate": 10,
 			                             "tables": "[Hall]\nT1:4\nT2:2"}).insert().name
-		cls.paneer = frappe.get_doc({"doctype": "Pep Ingredient", "restaurant": REST,
+		cls.paneer = frappe.get_doc({"doctype": "Restaurant Ingredient", "restaurant": REST,
 		                             "ingredient_name": "Paneer", "uom": "kg", "cost_per_unit": 400}).insert().name
-		cls.tikka = frappe.get_doc({"doctype": "Pep Menu Item", "outlet": cls.outlet, "item_name": "Tikka",
+		cls.tikka = frappe.get_doc({"doctype": "Restaurant Menu Item", "outlet": cls.outlet, "item_name": "Tikka",
 		                            "price": 300, "course": "Starter",
 		                            "recipe": [{"ingredient": cls.paneer, "qty": 0.2}]}).insert().name
-		cls.curry = frappe.get_doc({"doctype": "Pep Menu Item", "outlet": cls.outlet, "item_name": "Curry",
+		cls.curry = frappe.get_doc({"doctype": "Restaurant Menu Item", "outlet": cls.outlet, "item_name": "Curry",
 		                            "price": 200, "course": "Main"}).insert().name
 		cls.cashier_user = _ensure_user("pep-cashier@example.com", "Restaurant Cashier")
 
@@ -59,11 +59,11 @@ class TestPepPOS(TestCase):
 		return pos.create_order(outlet=self.outlet, items=items, table_no="T1", **kw)["order"]
 
 	def _stock(self):
-		return flt(frappe.db.get_value("Pep Ingredient Stock", f"{self.outlet}::{self.paneer}", "qty_on_hand"))
+		return flt(frappe.db.get_value("Restaurant Ingredient Stock", f"{self.outlet}::{self.paneer}", "qty_on_hand"))
 
 	def test_price_comes_from_menu_and_totals(self):
 		name = self._order(items=[{"menu_item": self.tikka, "qty": 2, "rate": 1}])
-		doc = frappe.get_doc("Pep Order", name)
+		doc = frappe.get_doc("Restaurant Order", name)
 		self.assertEqual(doc.items[0].rate, 300)  # the caller's rate is ignored
 		self.assertEqual(doc.subtotal, 600)
 		self.assertEqual(doc.service_charge, 60)  # 10% of net
@@ -75,14 +75,14 @@ class TestPepPOS(TestCase):
 		self.assertEqual(doc.grand_total, flt((500 + 50) * 1.05, 2))
 
 	def test_prices_include_tax(self):
-		frappe.db.set_value("Pep Restaurant", REST, "prices_include_tax", 1)
+		frappe.db.set_value("Restaurant", REST, "prices_include_tax", 1)
 		try:
 			name = self._order(items=[{"menu_item": self.curry, "qty": 1}])
-			doc = frappe.get_doc("Pep Order", name)
+			doc = frappe.get_doc("Restaurant Order", name)
 			self.assertEqual(doc.grand_total, 220)  # 200 + 10% service, tax inside
 			self.assertAlmostEqual(doc.tax_amount, flt(220 - 220 / 1.05, 2), places=2)
 		finally:
-			frappe.db.set_value("Pep Restaurant", REST, "prices_include_tax", 0)
+			frappe.db.set_value("Restaurant", REST, "prices_include_tax", 0)
 
 	def test_fire_deducts_stock_once_and_void_does_not_restore(self):
 		before = self._stock()
@@ -92,14 +92,14 @@ class TestPepPOS(TestCase):
 		self.assertAlmostEqual(self._stock(), before - 0.4, places=6)
 		with self.assertRaises(frappe.ValidationError):
 			pos.fire_kot(order=name)  # nothing new to send
-		row = frappe.get_doc("Pep Order", name).items[0].name
+		row = frappe.get_doc("Restaurant Order", name).items[0].name
 		pos.void_item(order=name, item_row=row, reason="guest changed mind")
 		self.assertAlmostEqual(self._stock(), before - 0.4, places=6)  # heat is irreversible
 
 	def test_course_firing_holds_the_rest(self):
 		name = self._order()
 		pos.fire_kot(order=name, course="Starter")
-		doc = frappe.get_doc("Pep Order", name)
+		doc = frappe.get_doc("Restaurant Order", name)
 		states = {it.item_name: it.kot_status for it in doc.items}
 		self.assertEqual(states, {"Tikka": "Fired", "Curry": "New"})
 		board = next(o for o in pos.kitchen_queue(restaurant=REST, outlet=self.outlet) if o["name"] == name)
@@ -110,9 +110,9 @@ class TestPepPOS(TestCase):
 		before = self._stock()
 		name = self._order()
 		pos.fire_kot(order=name)
-		row = next(it.name for it in frappe.get_doc("Pep Order", name).items if it.item_name == "Tikka")
+		row = next(it.name for it in frappe.get_doc("Restaurant Order", name).items if it.item_name == "Tikka")
 		new = pos.split_order(order=name, item_rows=[row], table_no="T2")["new_order"]
-		self.assertEqual(frappe.get_doc("Pep Order", new).items[0].stock_posted, 1)
+		self.assertEqual(frappe.get_doc("Restaurant Order", new).items[0].stock_posted, 1)
 		pos.add_items(order=new, items=[{"menu_item": self.curry, "qty": 1}])
 		pos.fire_kot(order=new)
 		self.assertAlmostEqual(self._stock(), before - 0.4, places=6)
@@ -124,9 +124,9 @@ class TestPepPOS(TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			pos.mark_nc(order=name, authorized_by="")
 		pos.mark_nc(order=name, authorized_by="GM", note="birthday")
-		self.assertEqual(frappe.db.get_value("Pep Order", name, "grand_total"), 0)
+		self.assertEqual(frappe.db.get_value("Restaurant Order", name, "grand_total"), 0)
 		pos.close_order(order=name)
-		self.assertEqual(frappe.db.get_value("Pep Order", name, "status"), "Closed")
+		self.assertEqual(frappe.db.get_value("Restaurant Order", name, "status"), "Closed")
 
 	def test_payment_needs_shift_and_reconciles(self):
 		name = self._order(items=[{"menu_item": self.curry, "qty": 1}])  # 200 + 20 + 11 = 231
@@ -137,7 +137,7 @@ class TestPepPOS(TestCase):
 		out = pos.pay_order(order=name, payments=[{"mode": "Card", "amount": 100}, {"mode": "Cash", "amount": 200}])
 		self.assertEqual(out["change"], 69)
 		self.assertEqual(out["payment_mode"], "Split")
-		s = frappe.get_doc("Pep Cashier Session", sess)
+		s = frappe.get_doc("Restaurant Cashier Session", sess)
 		self.assertEqual(s.system_card, 100)
 		self.assertEqual(s.system_cash, 131)
 		self.assertEqual(s.expected_cash, 1131)
@@ -155,7 +155,7 @@ class TestPepPOS(TestCase):
 		frappe.set_user("Guest")
 		out = qr_order(outlet=self.outlet, items=[{"menu_item": self.curry, "qty": 1, "rate": 0}], table_no="T2")
 		frappe.set_user("Administrator")
-		doc = frappe.get_doc("Pep Order", out["order"])
+		doc = frappe.get_doc("Restaurant Order", out["order"])
 		self.assertEqual((doc.source, doc.status, doc.items[0].rate), ("QR", "Placed", 200))
 		with self.assertRaises(frappe.ValidationError):
 			pos.fire_kot(order=doc.name)
@@ -172,8 +172,8 @@ class TestPepPOS(TestCase):
 		pos.fire_kot(order=b)
 		self.assertEqual({t["table"]: t for t in pos.table_map(outlet=self.outlet)["tables"]}["M2"]["state"], "fired")
 		pos.merge_orders(order=b, into=a)
-		self.assertEqual(frappe.db.get_value("Pep Order", b, "status"), "Cancelled")
-		self.assertEqual(frappe.db.get_value("Pep Order", a, "subtotal"), 1000)
+		self.assertEqual(frappe.db.get_value("Restaurant Order", b, "status"), "Cancelled")
+		self.assertEqual(frappe.db.get_value("Restaurant Order", a, "subtotal"), 1000)
 
 	def test_stock_take_needs_note(self):
 		with self.assertRaises(frappe.ValidationError):
@@ -202,12 +202,12 @@ class TestPepPOS(TestCase):
 	def test_kitchen_stations(self):
 		from pep_restaurant import menu
 
-		rest = frappe.get_doc("Pep Restaurant", REST)
+		rest = frappe.get_doc("Restaurant", REST)
 		rest.prep_stations = "Kitchen\nGrill\nPizza Oven\ngrill\n"
 		rest.save()
 		self.assertEqual(rest.prep_stations, "Kitchen\nGrill\nPizza Oven")  # deduped, trimmed
 		dish = menu.save_menu_item(outlet=self.outlet, item_name="Margherita", price=400, prep_station="pizza oven")["name"]
-		self.assertEqual(frappe.db.get_value("Pep Menu Item", dish, "prep_station"), "Pizza Oven")
+		self.assertEqual(frappe.db.get_value("Restaurant Menu Item", dish, "prep_station"), "Pizza Oven")
 		with self.assertRaises(frappe.ValidationError):
 			menu.save_menu_item(outlet=self.outlet, item_name="Naan", price=60, prep_station="Tandoor")
 		rest.reload()
@@ -221,7 +221,7 @@ class TestPepPOS(TestCase):
 		out = menu.import_csv(outlet=self.outlet,
 		                      csv_text="﻿item_name;price;category;prep_station;is_veg\nKulfi;90;Desserts;Kitchen;yes\n")
 		self.assertEqual((out["created"] + out["updated"], out["errors"]), (1, []))
-		self.assertEqual(frappe.db.get_value("Pep Menu Item", {"item_name": "Kulfi"}, "is_veg"), 1)
+		self.assertEqual(frappe.db.get_value("Restaurant Menu Item", {"item_name": "Kulfi"}, "is_veg"), 1)
 
 	def test_ingredient_import(self):
 		from pep_restaurant.inventory import import_ingredients
@@ -236,12 +236,12 @@ class TestPepPOS(TestCase):
 		out = import_ingredients(restaurant=REST, csv_text=csv_text, outlet=self.outlet)
 		self.assertEqual((out["created"], out["opening"]), (2, 2))
 		self.assertEqual({e["item"] for e in out["errors"]}, {"Bad Unit", "Imported Rice"})  # bad unit + duplicate
-		rice = frappe.db.get_value("Pep Ingredient", {"restaurant": REST, "ingredient_name": "Imported Rice"},
+		rice = frappe.db.get_value("Restaurant Ingredient", {"restaurant": REST, "ingredient_name": "Imported Rice"},
 		                           ["name", "uom", "cost_per_unit"], as_dict=True)
 		self.assertEqual((rice.uom, rice.cost_per_unit), ("kg", 22))
-		beer = frappe.db.get_value("Pep Ingredient", {"restaurant": REST, "ingredient_name": "Imported Beer"}, "uom")
+		beer = frappe.db.get_value("Restaurant Ingredient", {"restaurant": REST, "ingredient_name": "Imported Beer"}, "uom")
 		self.assertEqual(beer, "bottle")
-		stock = lambda: frappe.db.get_value("Pep Ingredient Stock", f"{self.outlet}::{rice.name}",  # noqa: E731
+		stock = lambda: frappe.db.get_value("Restaurant Ingredient Stock", f"{self.outlet}::{rice.name}",  # noqa: E731
 		                                   ["qty_on_hand", "par_level"])
 		self.assertEqual(stock(), (25, 8))
 		# re-importing the same file must not double the shelf
@@ -252,7 +252,7 @@ class TestPepPOS(TestCase):
 		# a unit can't change once stock is recorded in the old one
 		bad = import_ingredients(restaurant=REST, csv_text="ingredient_name,uom\nImported Rice,g\n")
 		self.assertEqual(len(bad["errors"]), 1)
-		self.assertEqual(frappe.db.get_value("Pep Ingredient", rice.name, "uom"), "kg")
+		self.assertEqual(frappe.db.get_value("Restaurant Ingredient", rice.name, "uom"), "kg")
 
 	def test_menu_import_downloads_photos(self):
 		from unittest import mock
@@ -290,12 +290,12 @@ class TestPepPOS(TestCase):
 			out = menu.import_csv(outlet=self.outlet, csv_text=csv_text)
 		self.assertEqual((out["created"] + out["updated"], out["photos"], out["errors"]), (2, 1, []))
 		self.assertEqual(len(out["notes"]), 1)  # the HTML link is a note; the dish still imports
-		dish = frappe.db.get_value("Pep Menu Item", {"outlet": self.outlet, "item_name": "Photo Dish"},
+		dish = frappe.db.get_value("Restaurant Menu Item", {"outlet": self.outlet, "item_name": "Photo Dish"},
 		                           ["name", "image", "image_credit"], as_dict=True)
 		self.assertTrue(dish.image.startswith("/files/"))
 		self.assertEqual(dish.image_credit, "Photo: A, CC BY 4.0")
 		self.assertTrue(frappe.db.exists("File", {"attached_to_name": dish.name, "file_url": dish.image}))
-		self.assertFalse(frappe.db.get_value("Pep Menu Item", {"item_name": "Not An Image"}, "image"))
+		self.assertFalse(frappe.db.get_value("Restaurant Menu Item", {"item_name": "Not An Image"}, "image"))
 		# never fetch from the restaurant's own network
 		with mock.patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("192.168.1.10", 80))]):
 			with self.assertRaises(frappe.ValidationError):

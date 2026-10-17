@@ -1,0 +1,229 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:MI-{#####}",
+ "creation": "2026-10-16 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "outlet",
+  "restaurant",
+  "item_name",
+  "category",
+  "price",
+  "column_break_a",
+  "course",
+  "prep_station",
+  "available",
+  "is_veg",
+  "is_alcohol",
+  "sort_order",
+  "section_more",
+  "description",
+  "allergens",
+  "column_break_b",
+  "image",
+  "image_credit",
+  "section_recipe_sec",
+  "recipe"
+ ],
+ "fields": [
+  {
+   "fieldname": "outlet",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Outlet",
+   "options": "Restaurant Outlet",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "outlet.restaurant",
+   "fieldname": "restaurant",
+   "fieldtype": "Link",
+   "label": "Restaurant",
+   "options": "Restaurant",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Category"
+  },
+  {
+   "fieldname": "price",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Price",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Main",
+   "fieldname": "course",
+   "fieldtype": "Select",
+   "label": "Course",
+   "options": "Starter\nMain\nDessert\nDrink"
+  },
+  {
+   "default": "Kitchen",
+   "description": "Where it is cooked - one of the restaurant's kitchen stations.",
+   "fieldname": "prep_station",
+   "fieldtype": "Data",
+   "label": "Station"
+  },
+  {
+   "default": "1",
+   "fieldname": "available",
+   "fieldtype": "Check",
+   "label": "Available"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_veg",
+   "fieldtype": "Check",
+   "label": "Veg"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_alcohol",
+   "fieldtype": "Check",
+   "label": "Alcohol"
+  },
+  {
+   "default": "0",
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order"
+  },
+  {
+   "fieldname": "section_more",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "description": "Comma separated: Nuts, Dairy, Gluten...",
+   "fieldname": "allergens",
+   "fieldtype": "Data",
+   "label": "Allergens"
+  },
+  {
+   "fieldname": "column_break_b",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "image",
+   "fieldtype": "Attach Image",
+   "label": "Image"
+  },
+  {
+   "description": "Shown under the photo on the guest QR menu, e.g. \"Photo: Jane Doe, CC BY-SA 4.0\". Needed for most free-licence photos.",
+   "fieldname": "image_credit",
+   "fieldtype": "Data",
+   "label": "Photo credit"
+  },
+  {
+   "fieldname": "section_recipe_sec",
+   "fieldtype": "Section Break",
+   "label": "Recipe"
+  },
+  {
+   "fieldname": "recipe",
+   "fieldtype": "Table",
+   "label": "Recipe",
+   "options": "Restaurant Menu Item Ingredient"
+  }
+ ],
+ "image_field": "image",
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-17 23:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Menu Item",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Restaurant Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Restaurant Captain",
+   "share": 0,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Restaurant Cashier",
+   "share": 0,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Kitchen Staff",
+   "share": 0,
+   "write": 0
+  }
+ ],
+ "search_fields": "item_name,category",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "item_name",
+ "track_changes": 1
+}

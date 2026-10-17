@@ -41,7 +41,7 @@ export default function Accounting() {
     const s = await call<Status>(`${P}.accounting.status`, { restaurant: restaurant.name })
     setSt(s)
     if (!s.erpnext) return
-    setV(s.settings ?? { posting_mode: "Per shift", item_mode: "Single item", item_group: "Pep Restaurant" })
+    setV(s.settings ?? { posting_mode: "Per shift", item_mode: "Single item", item_group: "Restaurant" })
     setOp(await call<Options>(`${P}.accounting.options`, { company: s.settings?.company }))
   }, [restaurant])
   useEffect(() => { load().catch((e) => setErr(errText(e))) }, [load])
@@ -95,7 +95,7 @@ export default function Accounting() {
     return (
       <section className="rounded-2xl border border-line bg-card p-5">
         <h2 className="text-base font-bold">Accounting</h2>
-        <p className="mt-1 text-sm text-mute">ERPNext isn't installed on this site, so sales stay in Pep Restaurant only (bills, payments and cash shifts are all in Desk under Pep Order, Pep Cashier Transaction and Pep Cashier Session). Install ERPNext on this site to post sales to your books.</p>
+        <p className="mt-1 text-sm text-mute">ERPNext isn't installed on this site, so sales stay in Restaurant only (bills, payments and cash shifts are all in Desk under Restaurant Order, Restaurant Cashier Transaction and Restaurant Cashier Session). Install ERPNext on this site to post sales to your books.</p>
       </section>
     )
   }

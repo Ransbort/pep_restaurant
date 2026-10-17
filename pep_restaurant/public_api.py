@@ -10,7 +10,7 @@ from pep_restaurant.pos import _menu, create_order_core, parse_tables
 
 
 def _public_outlet(outlet: str):
-	o = frappe.db.get_value("Pep Outlet", outlet, ["outlet_name", "disabled", "restaurant", "qr_ordering", "tables"],
+	o = frappe.db.get_value("Restaurant Outlet", outlet, ["outlet_name", "disabled", "restaurant", "qr_ordering", "tables"],
 	                        as_dict=True)
 	if not o or o.disabled:
 		frappe.throw(_("This menu isn't available."))
@@ -20,7 +20,7 @@ def _public_outlet(outlet: str):
 @frappe.whitelist(allow_guest=True)
 def qr_menu(outlet: str):
 	o = _public_outlet(outlet)
-	rest = frappe.db.get_value("Pep Restaurant", o.restaurant,
+	rest = frappe.db.get_value("Restaurant", o.restaurant,
 	                           ["restaurant_name", "currency", "logo", "prices_include_tax", "disabled", "accent_color"], as_dict=True)
 	if not rest or rest.disabled:
 		frappe.throw(_("This menu isn't available."))

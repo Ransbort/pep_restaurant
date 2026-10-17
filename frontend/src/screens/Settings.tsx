@@ -49,7 +49,7 @@ export default function Settings() {
 
   return (
     <>
-      <PageHead title="Settings" sub="How Pep looks on this device, your restaurant's colour, and accounting." />
+      <PageHead title="Settings" sub="How the app looks on this device, your restaurant's colour, and accounting." />
       <div className="space-y-6">
         <section className="rounded-2xl border border-line bg-card p-5">
           <h2 className="text-base font-bold">Appearance</h2>

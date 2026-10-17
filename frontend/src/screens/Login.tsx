@@ -32,7 +32,7 @@ export default function Login() {
       <div className="relative hidden flex-col justify-between overflow-hidden bg-chrome p-10 text-white md:flex">
         <div className="flex items-center gap-2.5">
           <img src={import.meta.env.BASE_URL + "restaurant.svg"} alt="" className="size-14" />
-          <span className="wide text-lg font-bold">Pep Restaurant</span>
+          <span className="wide text-lg font-bold">Restaurant</span>
         </div>
         <div>
           <p className="wide max-w-md text-5xl font-extrabold leading-[1.02] tracking-tight">
@@ -48,7 +48,7 @@ export default function Login() {
       </div>
       <form onSubmit={submit} className="flex flex-col justify-center px-6 py-12 sm:px-14">
         <div className="mx-auto w-full max-w-sm space-y-4">
-          <div className="mb-6 md:hidden"><img src={import.meta.env.BASE_URL + "restaurant.svg"} alt="Pep Restaurant" className="size-16" /></div>
+          <div className="mb-6 md:hidden"><img src={import.meta.env.BASE_URL + "restaurant.svg"} alt="Restaurant" className="size-16" /></div>
           <h1 className="wide text-2xl font-extrabold">Sign in to start your shift</h1>
           <Field label="Email or username"><Input autoComplete="username" value={usr} onChange={(e) => setUsr(e.target.value)} required /></Field>
           <Field label="Password"><Input type="password" autoComplete="current-password" value={pwd} onChange={(e) => setPwd(e.target.value)} required /></Field>

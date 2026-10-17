@@ -31,32 +31,32 @@ INGREDIENTS = [
 
 
 def seed(restaurant_name: str = "Pep Bistro"):
-	if frappe.db.exists("Pep Restaurant", restaurant_name):
+	if frappe.db.exists("Restaurant", restaurant_name):
 		print(f"{restaurant_name} already exists - nothing to do")
 		return
 	frappe.get_doc({
-		"doctype": "Pep Restaurant", "restaurant_name": restaurant_name, "currency": "INR",
+		"doctype": "Restaurant", "restaurant_name": restaurant_name, "currency": "INR",
 		"tax_label": "GST", "tax_split": "CGST:50\nSGST:50", "address": "12 MG Road, Bengaluru",
 		"phone": "+91 80 1234 5678", "require_open_session": 1,
 	}).insert(ignore_permissions=True)
 	dining = frappe.get_doc({
-		"doctype": "Pep Outlet", "restaurant": restaurant_name, "outlet_name": "Main Dining",
+		"doctype": "Restaurant Outlet", "restaurant": restaurant_name, "outlet_name": "Main Dining",
 		"outlet_type": "Restaurant", "tax_rate": 5, "service_charge_rate": 0, "qr_ordering": 1,
 		"tables": "[Main Hall]\nT1:2\nT2:2\nT3:4\nT4:4\nT5:6\n[Patio]\nP1:4\nP2:4\nP3:8",
 	}).insert(ignore_permissions=True)
 	bar = frappe.get_doc({
-		"doctype": "Pep Outlet", "restaurant": restaurant_name, "outlet_name": "Rooftop Bar",
+		"doctype": "Restaurant Outlet", "restaurant": restaurant_name, "outlet_name": "Rooftop Bar",
 		"outlet_type": "Bar", "tax_rate": 18, "auto_kot": 1, "tables": "B1:2\nB2:2\nB3:4\nB4:4",
 	}).insert(ignore_permissions=True)
 	ing = {}
 	for name, cat, uom, cost, opening in INGREDIENTS:
-		d = frappe.get_doc({"doctype": "Pep Ingredient", "restaurant": restaurant_name, "ingredient_name": name,
+		d = frappe.get_doc({"doctype": "Restaurant Ingredient", "restaurant": restaurant_name, "ingredient_name": name,
 		                    "category": cat, "uom": uom, "cost_per_unit": cost}).insert(ignore_permissions=True)
 		ing[name] = (d.name, opening)
 	for i, (name, cat, price, course, station, veg, alc, allergens, recipe) in enumerate(MENU):
 		outlet = bar.name if cat == "Bar" else dining.name
 		frappe.get_doc({
-			"doctype": "Pep Menu Item", "outlet": outlet, "item_name": name, "category": cat, "price": price,
+			"doctype": "Restaurant Menu Item", "outlet": outlet, "item_name": name, "category": cat, "price": price,
 			"course": course, "prep_station": station, "is_veg": veg, "is_alcohol": alc, "allergens": allergens,
 			"sort_order": i, "recipe": [{"ingredient": ing[r][0], "qty": q} for r, q in recipe],
 		}).insert(ignore_permissions=True)

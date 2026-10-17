@@ -3,7 +3,7 @@
 Whitelisted endpoints enforce scope themselves (authz.require_roles); these
 hooks close the generic /api/resource and Desk paths. Only active under the
 site config `pep_strict_scope` - otherwise Frappe's User Permissions on
-Pep Restaurant (applied through each doctype's `restaurant` link) govern."""
+Restaurant (applied through each doctype's `restaurant` link) govern."""
 
 import frappe
 from frappe.utils import cint

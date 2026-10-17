@@ -21,17 +21,17 @@ def menu_items(outlet: str, include_unavailable: int = 1):
 	filters = {"outlet": outlet}
 	if not cint(include_unavailable):
 		filters["available"] = 1
-	return frappe.get_all("Pep Menu Item", filters=filters, fields=["name", "outlet", *FIELDS],
+	return frappe.get_all("Restaurant Menu Item", filters=filters, fields=["name", "outlet", *FIELDS],
 	                      order_by="category asc, sort_order asc, item_name asc")
 
 
 @frappe.whitelist(methods=["POST"])
-@require_roles(scope={"name": "Pep Menu Item"})
+@require_roles(scope={"name": "Restaurant Menu Item"})
 def save_menu_item(outlet: str, item_name: str, price: float, name: str | None = None, **fields):
 	"""Create or update a dish. Unknown keys are ignored."""
 	if not (item_name or "").strip():
 		frappe.throw(_("A dish needs a name."))
-	doc = frappe.get_doc("Pep Menu Item", name) if name else frappe.new_doc("Pep Menu Item")
+	doc = frappe.get_doc("Restaurant Menu Item", name) if name else frappe.new_doc("Restaurant Menu Item")
 	doc.outlet = outlet
 	doc.item_name = item_name.strip()[:140]
 	doc.price = flt(price)
@@ -50,12 +50,12 @@ def save_menu_item(outlet: str, item_name: str, price: float, name: str | None =
 
 
 @frappe.whitelist(methods=["POST"])
-@require_roles(scope={"name": "Pep Menu Item"})
+@require_roles(scope={"name": "Restaurant Menu Item"})
 def delete_menu_item(name: str):
 	"""A dish that has been sold is part of bill history - hide it instead."""
-	if frappe.db.count("Pep Order Item", {"menu_item": name}):
+	if frappe.db.count("Restaurant Order Item", {"menu_item": name}):
 		frappe.throw(_("This dish is on past bills. Mark it unavailable instead."))
-	frappe.delete_doc("Pep Menu Item", name)
+	frappe.delete_doc("Restaurant Menu Item", name)
 	return {"ok": True}
 
 
@@ -65,8 +65,8 @@ def set_availability(menu_item: str, available: int):
 	"""86 a dish, or put it back. The ONLY thing that ever pulls an item off
 	the menu for stock reasons - and a human presses it. Nothing auto-86s on
 	a zero balance: the count is the least trustworthy number in the building."""
-	frappe.db.set_value("Pep Menu Item", menu_item, "available", 1 if cint(available) else 0)
-	doc = frappe.get_doc("Pep Menu Item", menu_item)
+	frappe.db.set_value("Restaurant Menu Item", menu_item, "available", 1 if cint(available) else 0)
+	doc = frappe.get_doc("Restaurant Menu Item", menu_item)
 	doc.run_method("on_update")  # realtime ping so tills refresh
 	return {"ok": True, "available": doc.available}
 
@@ -97,7 +97,7 @@ def import_csv(outlet: str, csv_text: str, update_existing: int = 1):
 			continue
 		try:
 			price = flt(str(row["price"]).replace(",", ""))
-			existing = frappe.db.get_value("Pep Menu Item", {"outlet": outlet, "item_name": row["item_name"]})
+			existing = frappe.db.get_value("Restaurant Menu Item", {"outlet": outlet, "item_name": row["item_name"]})
 			if existing and not cint(update_existing):
 				continue
 			extra = {k: row[k] for k in FIELDS if k in row and row[k] != "" and k not in ("item_name", "price")}

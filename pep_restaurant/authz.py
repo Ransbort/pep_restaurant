@@ -1,9 +1,9 @@
 """Endpoint authorization.
 
 Frappe checks doctype permissions on ORM paths, but frappe.get_all, raw SQL
-and db.set_value sail past them. Every whitelisted Pep endpoint therefore
+and db.set_value sail past them. Every whitelisted restaurant endpoint therefore
 declares who may call it with @require_roles - and, for staff restricted to
-some restaurants (Frappe User Permissions on "Pep Restaurant"), which
+some restaurants (Frappe User Permissions on "Restaurant"), which
 restaurant's records it may touch.
 
 Ported from kamra.authz with the hotel "property" scope replaced by the
@@ -41,12 +41,12 @@ ALL_ROLES = (MANAGER, CAPTAIN, CASHIER, KITCHEN)
 # Endpoint argument name -> doctype(s) it names. Each carries a `restaurant`
 # link, so the guard can tell which restaurant a call reaches into.
 SCOPED_ARGS = {
-	"outlet": ("Pep Outlet",),
-	"order": ("Pep Order",),
-	"menu_item": ("Pep Menu Item",),
-	"ingredient": ("Pep Ingredient",),
-	"reservation": ("Pep Table Reservation",),
-	"session": ("Pep Cashier Session",),
+	"outlet": ("Restaurant Outlet",),
+	"order": ("Restaurant Order",),
+	"menu_item": ("Restaurant Menu Item",),
+	"ingredient": ("Restaurant Ingredient",),
+	"reservation": ("Restaurant Table Reservation",),
+	"session": ("Restaurant Cashier Session",),
 }
 
 
@@ -57,7 +57,7 @@ def restricted_restaurants(user: str | None = None) -> set[str] | None:
 	from frappe.core.doctype.user_permission.user_permission import get_user_permissions
 
 	user = user or frappe.session.user
-	perms = get_user_permissions(user).get("Pep Restaurant")
+	perms = get_user_permissions(user).get("Restaurant")
 	if perms:
 		return {p.get("doc") for p in perms}
 	if cint(frappe.conf.get("pep_strict_scope")) and not (
@@ -140,7 +140,7 @@ def is_admin(user: str | None = None) -> bool:
 
 
 def _pin_policy(restaurant: str | None) -> tuple[int, int]:
-	r = frappe.db.get_value("Pep Restaurant", restaurant, ["pin_max_attempts", "pin_lock_minutes"], as_dict=True) or {}
+	r = frappe.db.get_value("Restaurant", restaurant, ["pin_max_attempts", "pin_lock_minutes"], as_dict=True) or {}
 	return int(r.get("pin_max_attempts") or 5), int(r.get("pin_lock_minutes") or 15)
 
 
@@ -149,7 +149,7 @@ def _unlock_key(user: str) -> str:
 
 
 def pin_required(restaurant: str | None) -> bool:
-	return bool(restaurant and frappe.db.get_value("Pep Restaurant", restaurant, "require_cashier_pin"))
+	return bool(restaurant and frappe.db.get_value("Restaurant", restaurant, "require_cashier_pin"))
 
 
 def require_cashier_pin(restaurant: str, pin=None):
@@ -166,9 +166,9 @@ def require_cashier_pin(restaurant: str, pin=None):
 	if frappe.cache.get_value(key):
 		frappe.cache.set_value(key, 1, expires_in_sec=lock_minutes * 60)
 		return
-	if not frappe.db.exists("Pep Cashier PIN", user):
+	if not frappe.db.exists("Restaurant Cashier PIN", user):
 		frappe.throw(_("PIN_NOT_SET: set your cashier PIN first, then retry."))
-	doc = frappe.get_doc("Pep Cashier PIN", user)
+	doc = frappe.get_doc("Restaurant Cashier PIN", user)
 	if doc.must_reset:
 		frappe.throw(_("PIN_MUST_RESET: your PIN was reset by a manager - set a new one."))
 	if doc.locked_until and now_datetime() < doc.locked_until:
@@ -177,7 +177,7 @@ def require_cashier_pin(restaurant: str, pin=None):
 		frappe.throw(_("PIN_REQUIRED: this action needs your cashier PIN."))
 	from frappe.utils.password import get_decrypted_password
 
-	stored = get_decrypted_password("Pep Cashier PIN", user, "pin", raise_exception=False)
+	stored = get_decrypted_password("Restaurant Cashier PIN", user, "pin", raise_exception=False)
 	if not stored or str(pin).strip() != str(stored):
 		attempts = int(doc.pin_attempts or 0) + 1
 		doc.pin_attempts = attempts
@@ -205,12 +205,12 @@ def set_my_pin(pin: str, current_pin: str | None = None):
 	if not (pin.isdigit() and 4 <= len(pin) <= 6):
 		frappe.throw(_("A PIN is 4 to 6 digits."))
 	user = frappe.session.user
-	if frappe.db.exists("Pep Cashier PIN", user):
-		doc = frappe.get_doc("Pep Cashier PIN", user)
+	if frappe.db.exists("Restaurant Cashier PIN", user):
+		doc = frappe.get_doc("Restaurant Cashier PIN", user)
 		if not doc.must_reset:
 			from frappe.utils.password import get_decrypted_password
 
-			stored = get_decrypted_password("Pep Cashier PIN", user, "pin", raise_exception=False)
+			stored = get_decrypted_password("Restaurant Cashier PIN", user, "pin", raise_exception=False)
 			if str(current_pin or "").strip() != str(stored):
 				frappe.throw(_("Your current PIN is wrong."))
 		doc.pin = pin
@@ -219,7 +219,7 @@ def set_my_pin(pin: str, current_pin: str | None = None):
 		doc.locked_until = None
 		doc.save(ignore_permissions=True)
 	else:
-		frappe.get_doc({"doctype": "Pep Cashier PIN", "user": user, "pin": pin}).insert(ignore_permissions=True)
+		frappe.get_doc({"doctype": "Restaurant Cashier PIN", "user": user, "pin": pin}).insert(ignore_permissions=True)
 	return {"ok": True}
 
 
@@ -227,8 +227,8 @@ def set_my_pin(pin: str, current_pin: str | None = None):
 @require_roles()
 def reset_pin(user: str):
 	"""Manager: force a staff member to enroll a new PIN."""
-	if frappe.db.exists("Pep Cashier PIN", user):
-		frappe.db.set_value("Pep Cashier PIN", user, {"must_reset": 1, "pin_attempts": 0, "locked_until": None})
+	if frappe.db.exists("Restaurant Cashier PIN", user):
+		frappe.db.set_value("Restaurant Cashier PIN", user, {"must_reset": 1, "pin_attempts": 0, "locked_until": None})
 	return {"ok": True}
 
 
@@ -246,8 +246,8 @@ def unlock(restaurant: str, pin: str):
 def pin_status(restaurant: str):
 	user = frappe.session.user
 	required = pin_required(restaurant)
-	has_pin = bool(frappe.db.exists("Pep Cashier PIN", user))
-	doc = frappe.get_doc("Pep Cashier PIN", user) if has_pin else None
+	has_pin = bool(frappe.db.exists("Restaurant Cashier PIN", user))
+	doc = frappe.get_doc("Restaurant Cashier PIN", user) if has_pin else None
 	return {
 		"required": required,
 		"has_pin": has_pin,

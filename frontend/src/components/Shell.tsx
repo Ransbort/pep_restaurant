@@ -64,7 +64,7 @@ export default function Shell({ children, bare }: { children: ReactNode; bare?: 
       <aside className="no-print hidden w-[188px] shrink-0 flex-col border-r border-white/5 bg-chrome px-3 py-4 text-white md:flex">
         <div className="mb-4 flex items-center gap-2 px-1">
           <img src={import.meta.env.BASE_URL + "restaurant.svg"} alt="" className="size-10 shrink-0" />
-          <span className="wide truncate text-sm font-bold">{restaurant?.restaurant_name ?? "Pep Restaurant"}</span>
+          <span className="wide truncate text-sm font-bold">{restaurant?.restaurant_name ?? "Restaurant"}</span>
         </div>
         <VenuePicker dark />
         <nav className="mt-4 flex-1 space-y-0.5">

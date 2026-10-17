@@ -1,4 +1,4 @@
-# Pep Restaurant
+# Restaurant
 
 A standalone restaurant POS for Frappe: table map, captain ordering, KOT and
 kitchen display, guest QR ordering, split bills and payments, cash shifts,
@@ -6,8 +6,10 @@ recipes, and ingredient stock that moves when the kitchen cooks.
 
 It started as a port of the F&B module in [Kamra PMS](../kamra-pms), with
 every hotel dependency (Property, Room, Reservation, Folio) removed. It
-installs on its own and can share a site with Kamra, because every doctype
-carries a `Pep` prefix.
+installs on its own and can share a site with Kamra and ERPNext, because every
+doctype starts with `Restaurant` (Restaurant Order, Restaurant Menu Item…), so none
+clashes with Kamra's Menu Item and Ingredient or ERPNext's Stock Ledger Entry. The
+Python package is still called `pep_restaurant`.
 
 ## Install
 
@@ -33,7 +35,7 @@ Works with Frappe v15 and v16 (tested on version-16, Python 3.14).
 | Restaurant Manager | Everything: setup, menu, recipes, goods-in, stock takes, write-offs, QR sheets |
 
 Each whitelisted endpoint enforces these roles with `@require_roles`. To
-limit someone to one restaurant, add a User Permission on **Pep Restaurant**.
+limit someone to one restaurant, add a User Permission on **Restaurant**.
 Set `"pep_strict_scope": 1` in site config if you want staff with no such
 permission to see nothing at all.
 
@@ -114,8 +116,8 @@ number; the rest still import.
 ## Accounting (ERPNext, optional)
 
 On a site with ERPNext, paid bills can post to your books as Sales Invoices.
-Without ERPNext nothing changes: bills, payments and shifts stay in Pep Order,
-Pep Cashier Transaction and Pep Cashier Session.
+Without ERPNext nothing changes: bills, payments and shifts stay in Restaurant Order,
+Restaurant Cashier Transaction and Restaurant Cashier Session.
 
 Set it up in **Settings → Accounting (ERPNext)** (managers):
 
@@ -166,7 +168,7 @@ shift twice returns the existing invoice and never duplicates it.
 - **QR orders wait for a captain.** A guest order lands as `Placed` and
   can't fire to the kitchen until a captain confirms it.
 - **A bill closes only when settled.** It must be paid, NC with whoever
-  authorized it, or fully voided (`Pep Order.guard_bill_close`).
+  authorized it, or fully voided (`Restaurant Order.guard_bill_close`).
 - **Voids are struck-through lines with a reason.** Nothing is deleted
   once it has been sent to the kitchen.
 - **Stock leaves when the KOT fires.** It is not returned on void, cancel or

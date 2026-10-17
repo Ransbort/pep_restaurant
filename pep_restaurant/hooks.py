@@ -1,6 +1,6 @@
 app_name = "pep_restaurant"
-app_title = "Pep Restaurant"
-app_publisher = "Pep Restaurant"
+app_title = "Restaurant"
+app_publisher = "Restaurant"
 app_description = (
 	"Standalone restaurant POS - table map, captain ordering, KOT and kitchen "
 	"display, guest QR ordering, cash shifts, recipes and ingredient stock."
@@ -13,7 +13,7 @@ add_to_apps_screen = [
 	{
 		"name": "pep_restaurant",
 		"logo": "/assets/pep_restaurant/restaurant.svg",
-		"title": "Pep Restaurant",
+		"title": "Restaurant",
 		"route": "/restaurant",
 	}
 ]
@@ -33,15 +33,15 @@ doc_events = {
 		"on_update": "pep_restaurant.realtime.notify",
 		"on_trash": "pep_restaurant.realtime.notify",
 	}
-	for doctype in ("Pep Order", "Pep Table Reservation", "Pep Menu Item")
+	for doctype in ("Restaurant Order", "Restaurant Table Reservation", "Restaurant Menu Item")
 }
 
 # Restaurant-scoped doctypes: under site config `pep_strict_scope`, staff
-# without a User Permission on Pep Restaurant see none of them in Desk/REST.
+# without a User Permission on Restaurant see none of them in Desk/REST.
 _SCOPED = (
-	"Pep Outlet", "Pep Menu Item", "Pep Order", "Pep Table Reservation",
-	"Pep Ingredient", "Pep Ingredient Stock", "Pep Stock Ledger Entry",
-	"Pep Cashier Session", "Pep Cashier Transaction", "Pep Accounting Settings",
+	"Restaurant Outlet", "Restaurant Menu Item", "Restaurant Order", "Restaurant Table Reservation",
+	"Restaurant Ingredient", "Restaurant Ingredient Stock", "Restaurant Stock Ledger Entry",
+	"Restaurant Cashier Session", "Restaurant Cashier Transaction", "Restaurant Accounting Settings",
 )
 permission_query_conditions = {dt: "pep_restaurant.permissions.query_conditions" for dt in _SCOPED}
 has_permission = {dt: "pep_restaurant.permissions.has_permission" for dt in _SCOPED}

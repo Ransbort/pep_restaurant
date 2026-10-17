@@ -1,4 +1,4 @@
-// Thin client for Pep Restaurant's whitelisted API (session-cookie auth).
+// Thin client for Restaurant's whitelisted API (session-cookie auth).
 
 function csrfToken(): string | undefined {
   const t = (window as unknown as { csrf_token?: string }).csrf_token

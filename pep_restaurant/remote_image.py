@@ -81,8 +81,8 @@ def attach_to_dish(dish: str, url: str) -> str:
 	stem = "".join(c if c.isalnum() or c in "-_" else "-" for c in stem).strip("-")[:80] or "dish"
 	f = frappe.get_doc({
 		"doctype": "File", "file_name": f"{stem}{ext}", "content": data, "is_private": 0,
-		"attached_to_doctype": "Pep Menu Item", "attached_to_name": dish, "attached_to_field": "image",
+		"attached_to_doctype": "Restaurant Menu Item", "attached_to_name": dish, "attached_to_field": "image",
 	})
 	f.insert(ignore_permissions=True)
-	frappe.db.set_value("Pep Menu Item", dish, "image", f.file_url)
+	frappe.db.set_value("Restaurant Menu Item", dish, "image", f.file_url)
 	return f.file_url

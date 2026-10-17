@@ -45,14 +45,14 @@ def _status(qty: float, par: float) -> str:
 
 
 def _outlet_restaurant(outlet: str) -> str:
-	r = frappe.db.get_value("Pep Outlet", outlet, "restaurant")
+	r = frappe.db.get_value("Restaurant Outlet", outlet, "restaurant")
 	if not r:
 		frappe.throw(_("Unknown outlet {0}.").format(outlet))
 	return r
 
 
 def _check_ingredient(restaurant: str, ingredient: str):
-	if frappe.db.get_value("Pep Ingredient", ingredient, "restaurant") != restaurant:
+	if frappe.db.get_value("Restaurant Ingredient", ingredient, "restaurant") != restaurant:
 		frappe.throw(_("{0} is not an ingredient of this restaurant.").format(ingredient))
 
 
@@ -64,18 +64,18 @@ def _stock_row(restaurant: str, outlet: str, ingredient: str, for_update: bool =
 	than application code, where races live. Do not replace this with an
 	exists()-then-insert or a validate() uniqueness check."""
 	name = f"{outlet}::{ingredient}"
-	if frappe.db.get_value("Pep Ingredient Stock", name, "name", for_update=for_update):
+	if frappe.db.get_value("Restaurant Ingredient Stock", name, "name", for_update=for_update):
 		return name
 	try:
 		doc = frappe.get_doc({
-			"doctype": "Pep Ingredient Stock", "name": name, "restaurant": restaurant, "outlet": outlet,
+			"doctype": "Restaurant Ingredient Stock", "name": name, "restaurant": restaurant, "outlet": outlet,
 			"ingredient": ingredient, "qty_on_hand": 0.0, "par_level": 0.0,
 		})
 		doc.flags.name_set = True
 		doc.insert(ignore_permissions=True)
 	except frappe.DuplicateEntryError:
 		# someone created it between our read and our insert - lock theirs
-		frappe.db.get_value("Pep Ingredient Stock", name, "name", for_update=True)
+		frappe.db.get_value("Restaurant Ingredient Stock", name, "name", for_update=True)
 	return name
 
 
@@ -87,19 +87,19 @@ def _apply_move(restaurant: str, outlet: str, ingredient: str, qty_change: float
 	entry, in one transaction. The for_update lock stops a lost update (two
 	chefs firing paneer in the same second both reading 10, both writing 8)."""
 	name = _stock_row(restaurant, outlet, ingredient, for_update=True)
-	current = flt(frappe.db.get_value("Pep Ingredient Stock", name, "qty_on_hand", for_update=True))
+	current = flt(frappe.db.get_value("Restaurant Ingredient Stock", name, "qty_on_hand", for_update=True))
 	after = current + flt(qty_change)
-	frappe.db.set_value("Pep Ingredient Stock", name, "qty_on_hand", after, update_modified=False)
+	frappe.db.set_value("Restaurant Ingredient Stock", name, "qty_on_hand", after, update_modified=False)
 	if set_counted:
-		frappe.db.set_value("Pep Ingredient Stock", name, {
+		frappe.db.set_value("Restaurant Ingredient Stock", name, {
 			"last_counted_at": frappe.utils.now(), "last_counted_by": frappe.session.user,
 		}, update_modified=False)
 	frappe.get_doc({
-		"doctype": "Pep Stock Ledger Entry", "restaurant": restaurant, "outlet": outlet,
+		"doctype": "Restaurant Stock Ledger Entry", "restaurant": restaurant, "outlet": outlet,
 		"ingredient": ingredient, "qty_change": flt(qty_change), "balance_after": after, "reason": reason,
 		"reference_doctype": ref_dt, "reference_name": ref_dn, "note": note, "supplier": supplier,
 		"invoice_no": invoice_no, "batch_id": batch_id,
-		"cost_per_unit": frappe.db.get_value("Pep Ingredient", ingredient, "cost_per_unit"),
+		"cost_per_unit": frappe.db.get_value("Restaurant Ingredient", ingredient, "cost_per_unit"),
 	}).insert(ignore_permissions=True)
 	return after
 
@@ -111,7 +111,7 @@ def _recipes_of(menu_items) -> dict:
 		return {}
 	out: dict[str, list] = {}
 	for r in frappe.get_all(
-		"Pep Menu Item Ingredient", filters={"parent": ("in", ids), "parenttype": "Pep Menu Item"},
+		"Restaurant Menu Item Ingredient", filters={"parent": ("in", ids), "parenttype": "Restaurant Menu Item"},
 		fields=["parent", "ingredient", "qty"], order_by="idx asc",
 	):
 		out.setdefault(r.parent, []).append((r.ingredient, flt(r.qty)))
@@ -142,17 +142,17 @@ def consume_for_lines(order, lines) -> list:
 	# share ingredients wait for each other instead of deadlocking mid-service.
 	for ing in sorted(need):
 		after = _apply_move(order.restaurant, order.outlet, ing, -need[ing], "Consumed",
-		                    ref_dt="Pep Order", ref_dn=order.name, note=f"KOT {order.kot_no or '-'}")
+		                    ref_dt="Restaurant Order", ref_dn=order.name, note=f"KOT {order.kot_no or '-'}")
 		if after <= 0:
 			alerts.append({
 				"ingredient": ing,
-				"ingredient_name": frappe.db.get_value("Pep Ingredient", ing, "ingredient_name"),
+				"ingredient_name": frappe.db.get_value("Restaurant Ingredient", ing, "ingredient_name"),
 				"qty_on_hand": after,
 				"level": STATUS_NEGATIVE.lower() if after < 0 else STATUS_OUT.lower(),
 			})
 	# stamp after every move landed - same transaction, so they roll back together
 	for it in todo:
-		frappe.db.set_value("Pep Order Item", it["row"], "stock_posted", 1, update_modified=False)
+		frappe.db.set_value("Restaurant Order Item", it["row"], "stock_posted", 1, update_modified=False)
 	return alerts
 
 
@@ -166,7 +166,7 @@ def ingredients(restaurant: str, active_only: int = 1):
 	if cint(active_only):
 		filters["is_active"] = 1
 	return frappe.get_all(
-		"Pep Ingredient", filters=filters,
+		"Restaurant Ingredient", filters=filters,
 		fields=["name", "ingredient_name", "uom", "category", "cost_per_unit", "is_active"],
 		order_by="ingredient_name asc",
 	)
@@ -177,22 +177,22 @@ def ingredients(restaurant: str, active_only: int = 1):
 def menu_recipe(menu_item: str):
 	"""One dish's recipe with each line's unit, cost and what the dish's
 	outlet has on hand right now."""
-	mi = frappe.db.get_value("Pep Menu Item", menu_item, ["item_name", "restaurant", "outlet", "price"],
+	mi = frappe.db.get_value("Restaurant Menu Item", menu_item, ["item_name", "restaurant", "outlet", "price"],
 	                         as_dict=True)
 	if not mi:
 		frappe.throw(_("Menu item not found."))
 	rows = frappe.get_all(
-		"Pep Menu Item Ingredient", filters={"parent": menu_item, "parenttype": "Pep Menu Item"},
+		"Restaurant Menu Item Ingredient", filters={"parent": menu_item, "parenttype": "Restaurant Menu Item"},
 		fields=["name", "ingredient", "qty", "note"], order_by="idx asc",
 	)
 	cost = 0.0
 	for r in rows:
-		meta = frappe.db.get_value("Pep Ingredient", r.ingredient, ["ingredient_name", "uom", "cost_per_unit"],
+		meta = frappe.db.get_value("Restaurant Ingredient", r.ingredient, ["ingredient_name", "uom", "cost_per_unit"],
 		                           as_dict=True) or {}
 		r.update(meta)
 		r["line_cost"] = flt(r.qty) * flt(meta.get("cost_per_unit"))
 		cost += r["line_cost"]
-		r["qty_on_hand"] = frappe.db.get_value("Pep Ingredient Stock", f"{mi.outlet}::{r.ingredient}", "qty_on_hand")
+		r["qty_on_hand"] = frappe.db.get_value("Restaurant Ingredient Stock", f"{mi.outlet}::{r.ingredient}", "qty_on_hand")
 	return {"menu_item": menu_item, "item_name": mi.item_name, "outlet": mi.outlet,
 	        "restaurant": mi.restaurant, "price": mi.price, "food_cost": flt(cost, 2),
 	        "food_cost_pct": flt(cost / flt(mi.price) * 100, 1) if flt(mi.price) else None, "recipe": rows}
@@ -203,24 +203,24 @@ def menu_recipe(menu_item: str):
 def recipe_overview(restaurant: str):
 	"""Every dish, whether it has a recipe yet, and its food cost."""
 	dishes = frappe.get_all(
-		"Pep Menu Item", filters={"restaurant": restaurant},
+		"Restaurant Menu Item", filters={"restaurant": restaurant},
 		fields=["name", "item_name", "outlet", "category", "available", "price"],
 		order_by="outlet asc, category asc, item_name asc",
 	)
 	if not dishes:
 		return []
 	costs = {i.name: flt(i.cost_per_unit) for i in frappe.get_all(
-		"Pep Ingredient", filters={"restaurant": restaurant}, fields=["name", "cost_per_unit"])}
+		"Restaurant Ingredient", filters={"restaurant": restaurant}, fields=["name", "cost_per_unit"])}
 	lines: dict[str, int] = {}
 	cost: dict[str, float] = {}
 	for r in frappe.get_all(
-		"Pep Menu Item Ingredient",
-		filters={"parent": ("in", [d.name for d in dishes]), "parenttype": "Pep Menu Item"},
+		"Restaurant Menu Item Ingredient",
+		filters={"parent": ("in", [d.name for d in dishes]), "parenttype": "Restaurant Menu Item"},
 		fields=["parent", "ingredient", "qty"],
 	):
 		lines[r.parent] = lines.get(r.parent, 0) + 1
 		cost[r.parent] = cost.get(r.parent, 0.0) + flt(r.qty) * costs.get(r.ingredient, 0)
-	outlet_names = dict(frappe.get_all("Pep Outlet", filters={"restaurant": restaurant},
+	outlet_names = dict(frappe.get_all("Restaurant Outlet", filters={"restaurant": restaurant},
 	                                   fields=["name", "outlet_name"], as_list=True))
 	for d in dishes:
 		d["lines"] = lines.get(d.name, 0)
@@ -237,7 +237,7 @@ def save_recipe(menu_item: str, rows):
 	never touches inventory"."""
 	if isinstance(rows, str):
 		rows = frappe.parse_json(rows)
-	doc = frappe.get_doc("Pep Menu Item", menu_item)
+	doc = frappe.get_doc("Restaurant Menu Item", menu_item)
 	clean = []
 	for r in rows or []:
 		if not r.get("ingredient"):
@@ -249,12 +249,12 @@ def save_recipe(menu_item: str, rows):
 
 
 @frappe.whitelist(methods=["POST"])
-@require_roles(*INVENTORY_WRITE, scope={"name": "Pep Ingredient"})
+@require_roles(*INVENTORY_WRITE, scope={"name": "Restaurant Ingredient"})
 def save_ingredient(restaurant: str, ingredient_name: str, uom: str, category: str | None = None,
                     cost_per_unit: float = 0, is_active: int = 1, name: str | None = None):
 	if not (ingredient_name or "").strip():
 		frappe.throw(_("An ingredient needs a name."))
-	doc = frappe.get_doc("Pep Ingredient", name) if name else frappe.new_doc("Pep Ingredient")
+	doc = frappe.get_doc("Restaurant Ingredient", name) if name else frappe.new_doc("Restaurant Ingredient")
 	if name and doc.restaurant != restaurant:
 		frappe.throw(_("That ingredient belongs to another restaurant."))
 	doc.update({
@@ -267,17 +267,17 @@ def save_ingredient(restaurant: str, ingredient_name: str, uom: str, category: s
 
 
 @frappe.whitelist(methods=["POST"])
-@require_roles(*INVENTORY_WRITE, scope={"name": "Pep Ingredient"})
+@require_roles(*INVENTORY_WRITE, scope={"name": "Restaurant Ingredient"})
 def delete_ingredient(name: str):
 	"""Refuse if it is on a recipe or has history - deactivate instead."""
-	used = frappe.db.count("Pep Menu Item Ingredient", {"ingredient": name})
+	used = frappe.db.count("Restaurant Menu Item Ingredient", {"ingredient": name})
 	if used:
 		frappe.throw(_("{0} dish(es) use this ingredient. Deactivate it instead.").format(used))
-	if frappe.db.count("Pep Stock Ledger Entry", {"ingredient": name}):
+	if frappe.db.count("Restaurant Stock Ledger Entry", {"ingredient": name}):
 		frappe.throw(_("This ingredient has stock history. Deactivate it instead."))
-	for s in frappe.get_all("Pep Ingredient Stock", filters={"ingredient": name}, pluck="name"):
-		frappe.delete_doc("Pep Ingredient Stock", s, ignore_permissions=True)
-	frappe.delete_doc("Pep Ingredient", name)
+	for s in frappe.get_all("Restaurant Ingredient Stock", filters={"ingredient": name}, pluck="name"):
+		frappe.delete_doc("Restaurant Ingredient Stock", s, ignore_permissions=True)
+	frappe.delete_doc("Restaurant Ingredient", name)
 	return {"ok": True}
 
 
@@ -309,7 +309,7 @@ def receive_stock(outlet: str, rows, supplier: str | None = None, invoice_no: st
 		_check_ingredient(restaurant, ing)
 		if r.get("cost_per_unit") not in (None, ""):
 			# the price we actually paid becomes the price we value waste at
-			frappe.db.set_value("Pep Ingredient", ing, "cost_per_unit", flt(r["cost_per_unit"]))
+			frappe.db.set_value("Restaurant Ingredient", ing, "cost_per_unit", flt(r["cost_per_unit"]))
 		after = _apply_move(restaurant, outlet, ing, qty, "Received", supplier=supplier, invoice_no=invoice_no,
 		                    batch_id=batch, note=r.get("note"))
 		out.append({"ingredient": ing, "qty_on_hand": after})
@@ -336,10 +336,10 @@ def adjust_stock(outlet: str, rows, note: str):
 		_check_ingredient(restaurant, ing)
 		counted = flt(r.get("counted_qty"))
 		name = _stock_row(restaurant, outlet, ing)
-		current = flt(frappe.db.get_value("Pep Ingredient Stock", name, "qty_on_hand"))
+		current = flt(frappe.db.get_value("Restaurant Ingredient Stock", name, "qty_on_hand"))
 		delta = counted - current
 		if abs(delta) < 1e-9:
-			frappe.db.set_value("Pep Ingredient Stock", name, {
+			frappe.db.set_value("Restaurant Ingredient Stock", name, {
 				"last_counted_at": frappe.utils.now(), "last_counted_by": frappe.session.user,
 			}, update_modified=False)
 			continue
@@ -373,7 +373,7 @@ def set_par_level(outlet: str, ingredient: str, par_level: float):
 	restaurant = _outlet_restaurant(outlet)
 	_check_ingredient(restaurant, ingredient)
 	name = _stock_row(restaurant, outlet, ingredient)
-	frappe.db.set_value("Pep Ingredient Stock", name, "par_level", max(flt(par_level), 0), update_modified=False)
+	frappe.db.set_value("Restaurant Ingredient Stock", name, "par_level", max(flt(par_level), 0), update_modified=False)
 	return {"ok": True}
 
 
@@ -387,11 +387,11 @@ def stock_list(outlet: str, status: str | None = None):
 	moved here (shown at zero), so a first goods-in has rows to fill."""
 	restaurant = _outlet_restaurant(outlet)
 	rows = {r.ingredient: r for r in frappe.get_all(
-		"Pep Ingredient Stock", filters={"outlet": outlet},
+		"Restaurant Ingredient Stock", filters={"outlet": outlet},
 		fields=["name", "ingredient", "qty_on_hand", "par_level", "last_counted_at", "last_counted_by"])}
 	out = []
 	for ing in frappe.get_all(
-		"Pep Ingredient", filters={"restaurant": restaurant},
+		"Restaurant Ingredient", filters={"restaurant": restaurant},
 		fields=["name", "ingredient_name", "uom", "category", "cost_per_unit", "is_active"],
 	):
 		r = rows.get(ing.name)
@@ -417,7 +417,7 @@ def stock_list(outlet: str, status: str | None = None):
 def ingredient_ledger(outlet: str, ingredient: str, limit: int = 50):
 	"""Where did my paneer go? Newest first, each row with the balance it left."""
 	return frappe.get_all(
-		"Pep Stock Ledger Entry", filters={"outlet": outlet, "ingredient": ingredient},
+		"Restaurant Stock Ledger Entry", filters={"outlet": outlet, "ingredient": ingredient},
 		fields=["name", "creation", "qty_change", "balance_after", "reason", "reference_doctype",
 		        "reference_name", "note", "supplier", "invoice_no", "cost_per_unit", "owner"],
 		order_by="creation desc", limit=min(cint(limit) or 50, 500),
@@ -433,16 +433,16 @@ def low_stock(restaurant: str, outlet: str | None = None):
 	if outlet:
 		filters["outlet"] = outlet
 	out = []
-	for r in frappe.get_all("Pep Ingredient Stock", filters=filters,
+	for r in frappe.get_all("Restaurant Ingredient Stock", filters=filters,
 	                        fields=["outlet", "ingredient", "qty_on_hand", "par_level", "last_counted_at"]):
 		st = _status(flt(r.qty_on_hand), flt(r.par_level))
 		if st == STATUS_OK:
 			continue
-		r.update(frappe.db.get_value("Pep Ingredient", r.ingredient, ["ingredient_name", "uom"], as_dict=True) or {})
+		r.update(frappe.db.get_value("Restaurant Ingredient", r.ingredient, ["ingredient_name", "uom"], as_dict=True) or {})
 		r["status"] = st
-		uses = frappe.get_all("Pep Menu Item Ingredient",
-		                      filters={"ingredient": r.ingredient, "parenttype": "Pep Menu Item"}, pluck="parent")
-		r["dishes"] = frappe.get_all("Pep Menu Item", filters={"name": ("in", uses), "outlet": r.outlet},
+		uses = frappe.get_all("Restaurant Menu Item Ingredient",
+		                      filters={"ingredient": r.ingredient, "parenttype": "Restaurant Menu Item"}, pluck="parent")
+		r["dishes"] = frappe.get_all("Restaurant Menu Item", filters={"name": ("in", uses), "outlet": r.outlet},
 		                             fields=["name", "item_name", "available"]) if uses else []
 		out.append(r)
 	out.sort(key=lambda r: _RANK[r["status"]])
@@ -465,7 +465,7 @@ def wastage_report(restaurant: str, outlet: str | None = None, days: int = 30):
 		params["outlet"] = outlet
 	lines = frappe.db.sql(
 		"""select i.item_name, i.menu_item, i.qty, i.void_reason, p.outlet, p.name as order_name, p.creation
-		     from `tabPep Order Item` i join `tabPep Order` p on p.name = i.parent
+		     from `tabRestaurant Order Item` i join `tabRestaurant Order` p on p.name = i.parent
 		    where """ + " and ".join(conds) + " order by p.creation desc",
 		params, as_dict=True,
 	)
@@ -477,7 +477,7 @@ def wastage_report(restaurant: str, outlet: str | None = None, days: int = 30):
 		value = 0.0
 		for ing, per in recipes.get(r.menu_item, ()):
 			if ing not in costs:
-				costs[ing] = flt(frappe.db.get_value("Pep Ingredient", ing, "cost_per_unit"))
+				costs[ing] = flt(frappe.db.get_value("Restaurant Ingredient", ing, "cost_per_unit"))
 			value += per * flt(r.qty) * costs[ing]
 		r["value"] = flt(value, 2)
 		total += value
@@ -487,11 +487,11 @@ def wastage_report(restaurant: str, outlet: str | None = None, days: int = 30):
 	            "creation": (">=", frappe.utils.add_days(frappe.utils.nowdate(), -(cint(days) or 30)))}
 	if outlet:
 		wfilters["outlet"] = outlet
-	written = frappe.get_all("Pep Stock Ledger Entry", filters=wfilters,
+	written = frappe.get_all("Restaurant Stock Ledger Entry", filters=wfilters,
 	                         fields=["ingredient", "qty_change", "cost_per_unit", "note", "creation", "outlet"],
 	                         order_by="creation desc")
 	for w in written:
-		w["ingredient_name"] = frappe.db.get_value("Pep Ingredient", w.ingredient, "ingredient_name")
+		w["ingredient_name"] = frappe.db.get_value("Restaurant Ingredient", w.ingredient, "ingredient_name")
 		w["value"] = flt(abs(flt(w.qty_change)) * flt(w.cost_per_unit), 2)
 	return {
 		"lines": lines,
@@ -542,7 +542,7 @@ def import_ingredients(restaurant: str, csv_text: str, outlet: str | None = None
 	stock take, which keeps the note and the variance."""
 	from pep_restaurant.csvutil import number, read_csv, yes
 
-	if outlet and frappe.db.get_value("Pep Outlet", outlet, "restaurant") != restaurant:
+	if outlet and frappe.db.get_value("Restaurant Outlet", outlet, "restaurant") != restaurant:
 		frappe.throw(_("That outlet belongs to another restaurant."))
 	headers, rows = read_csv(csv_text)
 	if "ingredient_name" not in headers and "name" in headers:
@@ -567,7 +567,7 @@ def import_ingredients(restaurant: str, csv_text: str, outlet: str | None = None
 		seen.add(name.lower())
 		frappe.db.savepoint("pep_ing_row")
 		try:
-			existing = frappe.db.get_value("Pep Ingredient", {"restaurant": restaurant, "ingredient_name": name})
+			existing = frappe.db.get_value("Restaurant Ingredient", {"restaurant": restaurant, "ingredient_name": name})
 			if existing and not cint(update_existing) and not wants_stock:
 				continue
 			cost = number(r.get("cost_per_unit"), "cost_per_unit")
@@ -576,12 +576,12 @@ def import_ingredients(restaurant: str, csv_text: str, outlet: str | None = None
 			if (qty is not None and qty < 0) or (par is not None and par < 0) or (cost is not None and cost < 0):
 				frappe.throw(_("Quantities and costs can't be negative."))
 			if not existing or cint(update_existing):
-				doc = frappe.get_doc("Pep Ingredient", existing) if existing else frappe.new_doc("Pep Ingredient")
+				doc = frappe.get_doc("Restaurant Ingredient", existing) if existing else frappe.new_doc("Restaurant Ingredient")
 				doc.restaurant = restaurant
 				doc.ingredient_name = name
 				if not existing or r.get("uom"):
 					if existing and _uom(r.get("uom")) != doc.uom and frappe.db.count(
-							"Pep Stock Ledger Entry", {"ingredient": existing}):
+							"Restaurant Stock Ledger Entry", {"ingredient": existing}):
 						frappe.throw(_("Can't change the unit from {0} to {1}: this ingredient already has stock "
 						               "history in {0}.").format(doc.uom, _uom(r.get("uom"))))
 					doc.uom = _uom(r.get("uom"))
@@ -598,7 +598,7 @@ def import_ingredients(restaurant: str, csv_text: str, outlet: str | None = None
 			else:
 				ing = existing
 			if outlet and qty:
-				if frappe.db.count("Pep Stock Ledger Entry", {"outlet": outlet, "ingredient": ing}):
+				if frappe.db.count("Restaurant Stock Ledger Entry", {"outlet": outlet, "ingredient": ing}):
 					notes.append({"line": line, "item": name,
 					              "note": _("already has stock here - opening stock skipped (use a stock take)")})
 				else:

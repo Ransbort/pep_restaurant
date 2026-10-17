@@ -13,7 +13,7 @@ from pep_restaurant.authz import MONEY_ROLES, is_admin, require_cashier_pin, req
 
 def _open_session_name(restaurant: str, user: str | None = None) -> str | None:
 	return frappe.db.get_value(
-		"Pep Cashier Session", {"restaurant": restaurant, "user": user or frappe.session.user, "status": "Open"},
+		"Restaurant Cashier Session", {"restaurant": restaurant, "user": user or frappe.session.user, "status": "Open"},
 		"name",
 	)
 
@@ -25,14 +25,14 @@ def session_for_payment(restaurant: str) -> str | None:
 	sess = _open_session_name(restaurant)
 	if sess:
 		return sess
-	required = cint(frappe.db.get_value("Pep Restaurant", restaurant, "require_open_session"))
+	required = cint(frappe.db.get_value("Restaurant", restaurant, "require_open_session"))
 	if required and frappe.session.user != "Administrator":
 		frappe.throw(_("NO_SHIFT: open your cash shift before taking payment."))
 	return None
 
 
 def _recompute(session: str) -> dict:
-	tx = frappe.get_all("Pep Cashier Transaction", filters={"session": session},
+	tx = frappe.get_all("Restaurant Cashier Transaction", filters={"session": session},
 	                    fields=["kind", "mode", "amount"])
 	totals = {"system_cash": 0.0, "system_card": 0.0, "system_upi": 0.0, "system_other": 0.0,
 	          "paid_outs": 0.0, "drops": 0.0, "refunds": 0.0}
@@ -49,9 +49,9 @@ def _recompute(session: str) -> dict:
 			totals["paid_outs"] += amt
 		elif t.kind == "Drop":
 			totals["drops"] += amt
-	opening = flt(frappe.db.get_value("Pep Cashier Session", session, "opening_float"))
+	opening = flt(frappe.db.get_value("Restaurant Cashier Session", session, "opening_float"))
 	totals["expected_cash"] = flt(opening + totals["system_cash"] - totals["paid_outs"] - totals["drops"], 2)
-	frappe.db.set_value("Pep Cashier Session", session, {k: flt(v, 2) for k, v in totals.items()},
+	frappe.db.set_value("Restaurant Cashier Session", session, {k: flt(v, 2) for k, v in totals.items()},
 	                    update_modified=False)
 	return totals
 
@@ -62,7 +62,7 @@ def record_txn(restaurant: str, kind: str, mode: str, amount: float, order: str 
 	gate is the calling endpoint's role check)."""
 	session = session or _open_session_name(restaurant)
 	frappe.get_doc({
-		"doctype": "Pep Cashier Transaction", "session": session, "restaurant": restaurant, "kind": kind,
+		"doctype": "Restaurant Cashier Transaction", "session": session, "restaurant": restaurant, "kind": kind,
 		"mode": mode, "amount": flt(amount, 2), "order": order, "reference": reference,
 		"posted_by": frappe.session.user, "posted_at": now(), "notes": notes,
 	}).insert(ignore_permissions=True)
@@ -71,9 +71,9 @@ def record_txn(restaurant: str, kind: str, mode: str, amount: float, order: str 
 
 
 def _as_dict(name: str) -> dict:
-	doc = frappe.get_doc("Pep Cashier Session", name).as_dict()
+	doc = frappe.get_doc("Restaurant Cashier Session", name).as_dict()
 	doc["transactions"] = frappe.get_all(
-		"Pep Cashier Transaction", filters={"session": name},
+		"Restaurant Cashier Transaction", filters={"session": name},
 		fields=["name", "kind", "mode", "amount", "order", "reference", "posted_at", "notes"],
 		order_by="posted_at desc",
 	)
@@ -95,7 +95,7 @@ def open_session(restaurant: str, opening_float: float = 0, terminal: str | None
 	if flt(opening_float) < 0:
 		frappe.throw(_("The opening float can't be negative."))
 	doc = frappe.get_doc({
-		"doctype": "Pep Cashier Session", "restaurant": restaurant, "user": frappe.session.user,
+		"doctype": "Restaurant Cashier Session", "restaurant": restaurant, "user": frappe.session.user,
 		"status": "Open", "opened_at": now(), "opening_float": flt(opening_float, 2),
 		"expected_cash": flt(opening_float, 2), "terminal": (terminal or "").strip()[:60] or None,
 	})
@@ -135,7 +135,7 @@ def _drawer_out(restaurant, kind, amount, reason, pin):
 def close_session(session: str, counted_cash: float, notes: str | None = None, pin: str | None = None):
 	"""Blind close: the cashier counts the drawer, the system shows the
 	variance against what it expected. A variance needs a note."""
-	doc = frappe.get_doc("Pep Cashier Session", session)
+	doc = frappe.get_doc("Restaurant Cashier Session", session)
 	if doc.status != "Open":
 		frappe.throw(_("This shift is already closed."))
 	if doc.user != frappe.session.user and not is_admin():
@@ -145,7 +145,7 @@ def close_session(session: str, counted_cash: float, notes: str | None = None, p
 	variance = flt(flt(counted_cash) - totals["expected_cash"], 2)
 	if abs(variance) >= 0.01 and not (notes or "").strip():
 		frappe.throw(_("The count is off by {0} - add a note explaining it.").format(variance))
-	frappe.db.set_value("Pep Cashier Session", session, {
+	frappe.db.set_value("Restaurant Cashier Session", session, {
 		"status": "Closed", "counted_cash": flt(counted_cash, 2), "variance": variance, "closed_at": now(),
 		"closed_by": frappe.session.user, "close_notes": (notes or "").strip()[:500] or None,
 	})
@@ -162,7 +162,7 @@ def list_sessions(restaurant: str, limit: int = 30):
 	if not is_admin():
 		filters["user"] = frappe.session.user
 	return frappe.get_all(
-		"Pep Cashier Session", filters=filters,
+		"Restaurant Cashier Session", filters=filters,
 		fields=["name", "user", "status", "opened_at", "closed_at", "opening_float", "system_cash", "system_card",
 		        "system_upi", "system_other", "paid_outs", "drops", "expected_cash", "counted_cash", "variance"],
 		order_by="opened_at desc", limit=min(cint(limit) or 30, 200),
@@ -172,7 +172,7 @@ def list_sessions(restaurant: str, limit: int = 30):
 @frappe.whitelist()
 @require_roles(*MONEY_ROLES)
 def session_report(session: str):
-	doc = frappe.db.get_value("Pep Cashier Session", session, ["user"], as_dict=True)
+	doc = frappe.db.get_value("Restaurant Cashier Session", session, ["user"], as_dict=True)
 	if doc and doc.user != frappe.session.user and not is_admin():
 		frappe.throw(_("Not your shift."), frappe.PermissionError)
 	return _as_dict(session)

@@ -57,7 +57,7 @@ export default function Setup() {
       </div>
       <section className="mt-6 rounded-2xl border border-line bg-card p-5 text-sm text-ink-2">
         <h2 className="mb-1 font-bold text-ink">Staff</h2>
-        <p>Add people as Users in Desk (<a className="underline" href="/app/user">/app/user</a>) and give each one or more roles: <b>Restaurant Captain</b> (takes orders), <b>Restaurant Cashier</b> (takes payment, runs cash shifts), <b>Kitchen Staff</b> (kitchen screen, stock counts) or <b>Restaurant Manager</b> (everything). To limit someone to one restaurant, add a User Permission on <i>Pep Restaurant</i>.</p>
+        <p>Add people as Users in Desk (<a className="underline" href="/app/user">/app/user</a>) and give each one or more roles: <b>Restaurant Captain</b> (takes orders), <b>Restaurant Cashier</b> (takes payment, runs cash shifts), <b>Kitchen Staff</b> (kitchen screen, stock counts) or <b>Restaurant Manager</b> (everything). To limit someone to one restaurant, add a User Permission on <i>Restaurant</i>.</p>
       </section>
 
       {editR && <RestaurantModal doc={editR} onClose={() => setEditR(null)} onSaved={async (n) => { setEditR(null); await reload(); setRestaurant(n); toast("Saved") }} />}

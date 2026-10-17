@@ -30,20 +30,20 @@ def boot():
 	if allowed is not None:
 		filters["name"] = ("in", list(allowed) or [""])
 	rests = frappe.get_all(
-		"Pep Restaurant", filters=filters,
+		"Restaurant", filters=filters,
 		fields=["name", "restaurant_name", "currency", "tax_label", "prices_include_tax", "require_cashier_pin",
 		        "require_open_session", "logo", "accent_color", "prep_stations"],
 		order_by="restaurant_name asc",
 	)
 	outlets = frappe.get_all(
-		"Pep Outlet", filters={"restaurant": ("in", [r.name for r in rests] or [""]), "disabled": 0},
+		"Restaurant Outlet", filters={"restaurant": ("in", [r.name for r in rests] or [""]), "disabled": 0},
 		fields=["name", "restaurant", "outlet_name", "outlet_type", "tax_rate", "service_charge_rate", "auto_kot",
 		        "qr_ordering"],
 		order_by="outlet_name asc",
 	)
 	symbols = {c.name: c.symbol for c in frappe.get_all(
 		"Currency", filters={"name": ("in", list({r.currency for r in rests}) or [""])}, fields=["name", "symbol"])}
-	from pep_restaurant.pep_restaurant.doctype.pep_restaurant.pep_restaurant import parse_stations
+	from pep_restaurant.restaurant.doctype.restaurant.restaurant import parse_stations
 
 	for r in rests:
 		r["prep_stations"] = parse_stations(r.prep_stations)
@@ -77,18 +77,18 @@ def _coerce(k, v):
 @frappe.whitelist()
 @require_roles()
 def get_restaurant(restaurant: str):
-	return frappe.get_doc("Pep Restaurant", restaurant).as_dict()
+	return frappe.get_doc("Restaurant", restaurant).as_dict()
 
 
 @frappe.whitelist(methods=["POST"])
 @require_roles()
 def save_restaurant(restaurant_name: str, name: str | None = None, **fields):
 	if name:
-		doc = frappe.get_doc("Pep Restaurant", name)
+		doc = frappe.get_doc("Restaurant", name)
 	else:
 		if not (restaurant_name or "").strip():
 			frappe.throw(_("A restaurant needs a name."))
-		doc = frappe.new_doc("Pep Restaurant")
+		doc = frappe.new_doc("Restaurant")
 		doc.restaurant_name = restaurant_name.strip()
 	for k in RESTAURANT_FIELDS:
 		if k in fields:
@@ -100,15 +100,15 @@ def save_restaurant(restaurant_name: str, name: str | None = None, **fields):
 @frappe.whitelist()
 @require_roles()
 def get_outlet(outlet: str):
-	return frappe.get_doc("Pep Outlet", outlet).as_dict()
+	return frappe.get_doc("Restaurant Outlet", outlet).as_dict()
 
 
 @frappe.whitelist(methods=["POST"])
-@require_roles(scope={"name": "Pep Outlet"})
+@require_roles(scope={"name": "Restaurant Outlet"})
 def save_outlet(restaurant: str, outlet_name: str, name: str | None = None, **fields):
 	if not (outlet_name or "").strip():
 		frappe.throw(_("An outlet needs a name."))
-	doc = frappe.get_doc("Pep Outlet", name) if name else frappe.new_doc("Pep Outlet")
+	doc = frappe.get_doc("Restaurant Outlet", name) if name else frappe.new_doc("Restaurant Outlet")
 	if name and doc.restaurant != restaurant:
 		frappe.throw(_("That outlet belongs to another restaurant."))
 	doc.restaurant = restaurant
@@ -128,7 +128,7 @@ def qr_targets(restaurant: str):
 	from pep_restaurant.pos import parse_tables
 
 	out = []
-	for o in frappe.get_all("Pep Outlet", filters={"restaurant": restaurant, "disabled": 0},
+	for o in frappe.get_all("Restaurant Outlet", filters={"restaurant": restaurant, "disabled": 0},
 	                        fields=["name", "outlet_name", "tables", "qr_ordering"], order_by="outlet_name"):
 		out.append({"outlet": o.name, "outlet_name": o.outlet_name, "qr_ordering": o.qr_ordering,
 		            "tables": [{"table": t, "seats": s, "area": a} for t, s, a in parse_tables(o.tables)]})
@@ -139,7 +139,7 @@ def qr_targets(restaurant: str):
 @require_roles()
 def set_accent(restaurant: str, accent_color: str):
 	"""Settings -> Colour theme: the restaurant's brand colour."""
-	doc = frappe.get_doc("Pep Restaurant", restaurant)
+	doc = frappe.get_doc("Restaurant", restaurant)
 	doc.accent_color = accent_color
 	doc.save()  # the controller validates and normalises the hex
 	return {"ok": True, "accent_color": doc.accent_color}

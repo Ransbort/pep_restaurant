@@ -1,0 +1,168 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:OUT-{#####}",
+ "creation": "2026-10-16 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "restaurant",
+  "outlet_name",
+  "outlet_type",
+  "column_break_a",
+  "tax_rate",
+  "service_charge_rate",
+  "auto_kot",
+  "qr_ordering",
+  "disabled",
+  "section_tables_sec",
+  "tables"
+ ],
+ "fields": [
+  {
+   "fieldname": "restaurant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Restaurant",
+   "options": "Restaurant",
+   "reqd": 1
+  },
+  {
+   "fieldname": "outlet_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Outlet Name",
+   "reqd": 1
+  },
+  {
+   "default": "Restaurant",
+   "fieldname": "outlet_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Outlet Type",
+   "options": "Restaurant\nBar\nCafe\nTakeaway Counter\nCloud Kitchen\nOther"
+  },
+  {
+   "fieldname": "column_break_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "5",
+   "fieldname": "tax_rate",
+   "fieldtype": "Percent",
+   "label": "Tax Rate"
+  },
+  {
+   "default": "0",
+   "fieldname": "service_charge_rate",
+   "fieldtype": "Percent",
+   "label": "Service Charge Rate"
+  },
+  {
+   "default": "0",
+   "description": "Firing a KOT also accepts it at the pass and prints the slip.",
+   "fieldname": "auto_kot",
+   "fieldtype": "Check",
+   "label": "Auto KOT"
+  },
+  {
+   "default": "1",
+   "fieldname": "qr_ordering",
+   "fieldtype": "Check",
+   "label": "Allow guest QR ordering"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "section_tables_sec",
+   "fieldtype": "Section Break",
+   "label": "Tables"
+  },
+  {
+   "description": "One table per line. \"[Main Hall]\" starts an area; \"T1:4\" is table T1 with 4 seats.",
+   "fieldname": "tables",
+   "fieldtype": "Small Text",
+   "label": "Tables"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-16 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Restaurant",
+ "name": "Restaurant Outlet",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Restaurant Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Restaurant Captain",
+   "share": 0,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Restaurant Cashier",
+   "share": 0,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Kitchen Staff",
+   "share": 0,
+   "write": 0
+  }
+ ],
+ "search_fields": "outlet_name,restaurant",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "outlet_name",
+ "track_changes": 1
+}

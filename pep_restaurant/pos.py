@@ -46,7 +46,7 @@ COURSE_ORDER = ("Starter", "Main", "Dessert", "Drink")
 @require_roles(*FLOOR_ROLES, *KITCHEN_ROLES)
 def outlets(restaurant: str):
 	return frappe.get_all(
-		"Pep Outlet",
+		"Restaurant Outlet",
 		filters={"restaurant": restaurant, "disabled": 0},
 		fields=["name", "outlet_name", "outlet_type", "tax_rate", "service_charge_rate", "auto_kot", "qr_ordering"],
 		order_by="outlet_name",
@@ -59,7 +59,7 @@ def _menu(outlet: str, guest: bool = False) -> list:
 	if not guest:
 		fields += ["course", "prep_station"]
 	items = frappe.get_all(
-		"Pep Menu Item",
+		"Restaurant Menu Item",
 		filters={"outlet": outlet, "available": 1},
 		fields=fields,
 		order_by="category asc, sort_order asc, item_name asc",
@@ -88,7 +88,7 @@ def _load_items(outlet: str, rows) -> list:
 	out = []
 	for r in rows or []:
 		mi = frappe.db.get_value(
-			"Pep Menu Item",
+			"Restaurant Menu Item",
 			r.get("menu_item"),
 			["item_name", "price", "available", "outlet", "course", "prep_station"],
 			as_dict=True,
@@ -122,7 +122,7 @@ def _allergy_hits(allergy_note: str | None, allergens: str | None) -> list:
 
 
 def _open_doc(order: str):
-	doc = frappe.get_doc("Pep Order", order)
+	doc = frappe.get_doc("Restaurant Order", order)
 	if doc.status not in OPEN:
 		frappe.throw(_("This order is already closed."))
 	return doc
@@ -145,7 +145,7 @@ def create_order_core(
 	allergy_note: str | None = None,
 	ignore_permissions: bool = False,
 ) -> dict:
-	o = frappe.db.get_value("Pep Outlet", outlet, ["restaurant", "disabled"], as_dict=True)
+	o = frappe.db.get_value("Restaurant Outlet", outlet, ["restaurant", "disabled"], as_dict=True)
 	if not o or o.disabled:
 		frappe.throw(_("This outlet isn't taking orders."))
 	lines = _load_items(outlet, items)
@@ -156,7 +156,7 @@ def create_order_core(
 	if order_type == "Delivery" and not (customer_phone or customer_name):
 		frappe.throw(_("Delivery needs the customer's name or phone."))
 	doc = frappe.get_doc({
-		"doctype": "Pep Order",
+		"doctype": "Restaurant Order",
 		"restaurant": o.restaurant,
 		"outlet": outlet,
 		"status": "Placed",
@@ -216,7 +216,7 @@ def _label(r) -> str:
 def open_orders(outlet: str):
 	"""Every running tab at an outlet, so a captain can juggle several."""
 	rows = frappe.get_all(
-		"Pep Order",
+		"Restaurant Order",
 		filters={"outlet": outlet, "status": ("in", OPEN)},
 		fields=["name", "status", "source", "table_no", "order_type", "grand_total", "kot_fired", "kot_no",
 		        "guests", "customer_name", "creation", "modified", "nc"],
@@ -225,8 +225,8 @@ def open_orders(outlet: str):
 	if rows:
 		counts: dict[str, dict] = {}
 		for it in frappe.get_all(
-			"Pep Order Item",
-			filters={"parent": ("in", [r.name for r in rows]), "parenttype": "Pep Order", "voided": 0},
+			"Restaurant Order Item",
+			filters={"parent": ("in", [r.name for r in rows]), "parenttype": "Restaurant Order", "voided": 0},
 			fields=["parent", "kot_status"],
 		):
 			c = counts.setdefault(it.parent, {"items": 0, "pending": 0, "new": 0})
@@ -265,7 +265,7 @@ def _flag_cleaning_if_freed(doc):
 	if not doc.table_no or doc.order_type != "Dine In":
 		return
 	still_open = frappe.db.count(
-		"Pep Order", {"outlet": doc.outlet, "table_no": doc.table_no, "status": ("in", OPEN)}
+		"Restaurant Order", {"outlet": doc.outlet, "table_no": doc.table_no, "status": ("in", OPEN)}
 	)
 	if not still_open:
 		frappe.cache.set_value(_cleaning_key(doc.outlet, doc.table_no), "1", expires_in_sec=30 * 60)
@@ -289,15 +289,15 @@ def parse_tables(raw: str | None) -> list[tuple[str, int | None, str | None]]:
 
 
 def _upcoming_reservations(outlet: str):
-	rest = frappe.db.get_value("Pep Outlet", outlet, "restaurant")
+	rest = frappe.db.get_value("Restaurant Outlet", outlet, "restaurant")
 	cfg = frappe.db.get_value(
-		"Pep Restaurant", rest, ["reservation_before_min", "reservation_after_min"], as_dict=True
+		"Restaurant", rest, ["reservation_before_min", "reservation_after_min"], as_dict=True
 	) or {}
 	before = cint(cfg.get("reservation_before_min") or 60)
 	after = cint(cfg.get("reservation_after_min") or 240)
 	n = now_datetime()
 	return frappe.get_all(
-		"Pep Table Reservation",
+		"Restaurant Table Reservation",
 		filters={
 			"outlet": outlet,
 			"status": "Booked",
@@ -316,7 +316,7 @@ def table_map(outlet: str):
 	running (open bill, nothing in the kitchen), fired (KOT cooking) or ready
 	(everything prepared, awaiting service/settle). A table holds any number
 	of bills; the tile shows the most urgent state."""
-	tables = parse_tables(frappe.db.get_value("Pep Outlet", outlet, "tables"))
+	tables = parse_tables(frappe.db.get_value("Restaurant Outlet", outlet, "tables"))
 	running = open_orders(outlet)
 	by_table: dict[str, list] = {}
 	for r in running:
@@ -374,7 +374,7 @@ def table_map(outlet: str):
 @require_roles(*FLOOR_ROLES)
 def order_detail(order: str):
 	"""One order's full contents - to load a running tab back into the till."""
-	doc = frappe.get_doc("Pep Order", order)
+	doc = frappe.get_doc("Restaurant Order", order)
 	return {
 		"name": doc.name, "outlet": doc.outlet, "restaurant": doc.restaurant, "status": doc.status,
 		"source": doc.source, "table_no": doc.table_no, "order_type": doc.order_type,
@@ -489,7 +489,7 @@ def split_order(order: str, item_rows, table_no: str | None = None):
 		frappe.throw(_("Every line is moving - move the bill to another table instead of splitting it."))
 	fired = any(it.kot_status != "New" for it in move)
 	new = frappe.get_doc({
-		"doctype": "Pep Order",
+		"doctype": "Restaurant Order",
 		"restaurant": src.restaurant,
 		"outlet": src.outlet,
 		"status": "Preparing" if fired else src.status,
@@ -591,7 +591,7 @@ def fire_kot(order: str, course: str | None = None):
 		frappe.throw(_("Confirm the guest's QR order before sending it to the kitchen."))
 	stamp = now()
 	fired, fired_rows = [], []
-	auto = bool(frappe.db.get_value("Pep Outlet", doc.outlet, "auto_kot"))
+	auto = bool(frappe.db.get_value("Restaurant Outlet", doc.outlet, "auto_kot"))
 	for it in doc.items:
 		if it.kot_status == "New" and not it.voided:
 			if course and (it.course or DEFAULT_COURSE) != course:
@@ -607,7 +607,7 @@ def fire_kot(order: str, course: str | None = None):
 	if not doc.kot_no:
 		# site-local "today", not the DB server's UTC date
 		last = frappe.db.sql(
-			"select max(kot_no) from `tabPep Order` where outlet=%s and creation >= %s",
+			"select max(kot_no) from `tabRestaurant Order` where outlet=%s and creation >= %s",
 			(doc.outlet, today()),
 		)[0][0] or 0
 		doc.kot_no = int(last) + 1
@@ -656,7 +656,7 @@ def kitchen_queue(restaurant: str, outlet: str | None = None, station: str | Non
 	if outlet:
 		filters["outlet"] = outlet
 	orders = frappe.get_all(
-		"Pep Order", filters=filters,
+		"Restaurant Order", filters=filters,
 		fields=["name", "outlet", "table_no", "creation", "notes", "kot_no", "order_type", "guests",
 		        "captain", "allergy_note", "accepted_at", "customer_name", "nc"],
 		order_by="creation asc",
@@ -664,20 +664,20 @@ def kitchen_queue(restaurant: str, outlet: str | None = None, station: str | Non
 	if not orders:
 		return []
 	rows = frappe.get_all(
-		"Pep Order Item",
-		filters={"parent": ("in", [o.name for o in orders]), "parenttype": "Pep Order"},
+		"Restaurant Order Item",
+		filters={"parent": ("in", [o.name for o in orders]), "parenttype": "Restaurant Order"},
 		fields=["name", "parent", "item_name", "qty", "instructions", "kot_status", "menu_item", "voided",
 		        "void_reason", "void_seen", "fired_at", "prepared_at", "course", "prep_station", "idx"],
 		order_by="idx asc",
 	)
 	menu = {
 		m.name: m for m in frappe.get_all(
-			"Pep Menu Item", filters={"name": ("in", list({r.menu_item for r in rows}))},
+			"Restaurant Menu Item", filters={"name": ("in", list({r.menu_item for r in rows}))},
 			fields=["name", "is_veg", "is_alcohol", "allergens"],
 		)
 	} if rows else {}
 	outlet_names = dict(frappe.get_all(
-		"Pep Outlet", filters={"name": ("in", list({o.outlet for o in orders}))},
+		"Restaurant Outlet", filters={"name": ("in", list({o.outlet for o in orders}))},
 		fields=["name", "outlet_name"], as_list=True,
 	))
 	allergy_of = {o.name: o.allergy_note for o in orders}
@@ -715,7 +715,7 @@ def kitchen_queue(restaurant: str, outlet: str | None = None, station: str | Non
 def accept_ticket(order: str):
 	"""The kitchen takes the ticket on. Until then the floor has no evidence
 	anyone has seen it - a KOT can print to an empty pass."""
-	doc = frappe.get_doc("Pep Order", order)
+	doc = frappe.get_doc("Restaurant Order", order)
 	if not doc.accepted_at:
 		doc.accepted_at = now()
 		doc.save()
@@ -766,7 +766,7 @@ def recall_prepared(order: str, item_row: str | None = None):
 def acknowledge_void(order: str, item_row: str):
 	"""The chef has seen that a fired line was cancelled; drop it from the
 	display. The void itself stays on the order."""
-	doc = frappe.get_doc("Pep Order", order)
+	doc = frappe.get_doc("Restaurant Order", order)
 	target = next((it for it in doc.items if it.name == item_row), None)
 	if not target:
 		frappe.throw(_("Order line not found."))
@@ -961,11 +961,11 @@ def pay_order(order: str, mode: str | None = None, payments=None, pin: str | Non
 def bill_data(order: str):
 	"""Everything the thermal bill needs: names, live lines, discount, service
 	charge and the tax split the restaurant's way (CGST+SGST, one VAT line)."""
-	from pep_restaurant.pep_restaurant.doctype.pep_restaurant.pep_restaurant import parse_tax_split
+	from pep_restaurant.restaurant.doctype.restaurant.restaurant import parse_tax_split
 
-	doc = frappe.get_doc("Pep Order", order)
-	rest = frappe.get_cached_doc("Pep Restaurant", doc.restaurant)
-	outlet_name = frappe.db.get_value("Pep Outlet", doc.outlet, "outlet_name")
+	doc = frappe.get_doc("Restaurant Order", order)
+	rest = frappe.get_cached_doc("Restaurant", doc.restaurant)
+	outlet_name = frappe.db.get_value("Restaurant Outlet", doc.outlet, "outlet_name")
 	split = parse_tax_split(rest.tax_split) or [(rest.tax_label or "Tax", 1.0)]
 	return {
 		"order": doc.name, "kot_no": doc.kot_no, "status": doc.status,
@@ -1002,7 +1002,7 @@ def recent_orders(outlet: str, limit: int = 15, search: str | None = None):
 		or_filters = {"name": ("like", like), "table_no": ("like", like), "customer_name": ("like", like),
 		              "customer_phone": ("like", like)}
 	rows = frappe.get_all(
-		"Pep Order", filters=filters, or_filters=or_filters,
+		"Restaurant Order", filters=filters, or_filters=or_filters,
 		fields=["name", "status", "order_type", "table_no", "customer_name", "grand_total", "paid",
 		        "payment_mode", "nc", "creation", "modified"],
 		order_by="modified desc", limit=min(cint(limit) or 15, 50),
@@ -1021,7 +1021,7 @@ def recent_orders(outlet: str, limit: int = 15, search: str | None = None):
 def reservations(outlet: str, date: str | None = None):
 	day = getdate(date) if date else getdate()
 	return frappe.get_all(
-		"Pep Table Reservation",
+		"Restaurant Table Reservation",
 		filters={"outlet": outlet, "reserved_at": ("between", [f"{day} 00:00:00", f"{day} 23:59:59"])},
 		fields=["name", "table_no", "guest_name", "phone", "party_size", "reserved_at", "status", "notes"],
 		order_by="reserved_at asc",
@@ -1039,7 +1039,7 @@ def reserve_table(outlet: str, table_no: str, guest_name: str, reserved_at: str,
 	if not (table_no or "").strip():
 		frappe.throw(_("Pick a table."))
 	doc = frappe.get_doc({
-		"doctype": "Pep Table Reservation", "outlet": outlet, "table_no": table_no.strip(),
+		"doctype": "Restaurant Table Reservation", "outlet": outlet, "table_no": table_no.strip(),
 		"guest_name": guest_name.strip()[:100], "phone": (phone or "").strip() or None,
 		"party_size": cint(party_size) or None, "reserved_at": reserved_at,
 		"notes": (notes or "").strip()[:200] or None,
@@ -1053,7 +1053,7 @@ def reserve_table(outlet: str, table_no: str, guest_name: str, reserved_at: str,
 def set_reservation(reservation: str, status: str):
 	if status not in ("Seated", "Cancelled", "No Show", "Booked"):
 		frappe.throw(_("Status must be Seated, Cancelled, No Show or Booked."))
-	doc = frappe.get_doc("Pep Table Reservation", reservation)
+	doc = frappe.get_doc("Restaurant Table Reservation", reservation)
 	doc.status = status
 	doc.save()
 	return {"ok": True, "status": status}
@@ -1070,9 +1070,9 @@ def expire_stale_reservations():
 	"""Daily: a booking a day past its time that nobody seated is a no-show."""
 	cutoff = add_to_date(now_datetime(), hours=-24)
 	for name in frappe.get_all(
-		"Pep Table Reservation", filters={"status": "Booked", "reserved_at": ("<", cutoff)}, pluck="name"
+		"Restaurant Table Reservation", filters={"status": "Booked", "reserved_at": ("<", cutoff)}, pluck="name"
 	):
-		frappe.db.set_value("Pep Table Reservation", name, "status", "No Show")
+		frappe.db.set_value("Restaurant Table Reservation", name, "status", "No Show")
 
 
 # --------------------------------------------------------------- reports
@@ -1088,7 +1088,7 @@ def outlet_dashboard(outlet: str, date: str | None = None, to_date: str | None =
 	end_day = getdate(to_date) if to_date else day
 	start, end = f"{day} 00:00:00", f"{end_day} 23:59:59"
 	orders = frappe.get_all(
-		"Pep Order",
+		"Restaurant Order",
 		filters={"outlet": outlet, "creation": ("between", [start, end])},
 		fields=["name", "status", "order_type", "table_no", "customer_name", "order_total", "subtotal",
 		        "grand_total", "tax_amount", "service_charge", "discount_amount", "discount_reason", "paid",
@@ -1097,8 +1097,8 @@ def outlet_dashboard(outlet: str, date: str | None = None, to_date: str | None =
 	)
 	names = [o.name for o in orders]
 	items = frappe.get_all(
-		"Pep Order Item",
-		filters={"parent": ("in", names), "parenttype": "Pep Order"},
+		"Restaurant Order Item",
+		filters={"parent": ("in", names), "parenttype": "Restaurant Order"},
 		fields=["parent", "item_name", "qty", "rate", "voided", "void_reason", "voided_by", "fired_at",
 		        "prepared_at", "kot_status"],
 	) if names else []

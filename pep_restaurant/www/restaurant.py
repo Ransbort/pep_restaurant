@@ -15,9 +15,9 @@ def get_context(context):
 	index_path = frappe.get_app_path("pep_restaurant", "public", "frontend", "index.html")
 	if not os.path.exists(index_path):
 		frappe.throw(
-			"The Pep Restaurant front-end is not built. Run "
+			"The Restaurant front-end is not built. Run "
 			"<code>cd apps/pep_restaurant/frontend && npm install && npm run build</code>.",
-			title="Pep Restaurant not built",
+			title="Restaurant not built",
 		)
 	with open(index_path, encoding="utf-8") as f:
 		html = f.read()

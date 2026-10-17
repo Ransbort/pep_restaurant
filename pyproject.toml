@@ -1,7 +1,7 @@
 [project]
 name = "pep_restaurant"
 authors = [
-    { name = "Pep Restaurant", email = "ransbor82@gmail.com" }
+    { name = "Restaurant", email = "ransbor82@gmail.com" }
 ]
 description = "Standalone restaurant POS for Frappe - tables, KOT, kitchen display, QR ordering, recipes and stock"
 requires-python = ">=3.10"
