@@ -25,7 +25,7 @@ const basename = location.pathname.startsWith("/restaurant") ? "/restaurant" : "
 const icon = document.createElement("link")
 icon.rel = "icon"
 icon.type = "image/svg+xml"
-icon.href = import.meta.env.BASE_URL + "pep-mark.svg"
+icon.href = import.meta.env.BASE_URL + "restaurant.svg"
 document.head.appendChild(icon)
 
 createRoot(document.getElementById("root")!).render(

@@ -13,6 +13,7 @@ def after_install():
 
 def after_migrate():
 	ensure_roles()
+	set_favicon()
 
 
 def ensure_roles():
@@ -26,9 +27,13 @@ def ensure_roles():
 			}).insert(ignore_permissions=True)
 
 
+OLD_FAVICONS = ("", None, "/assets/pep_restaurant/pep-mark.svg")
+
+
 def set_favicon():
+	"""Use the app logo as the site favicon - unless someone set their own."""
 	ws = frappe.get_doc("Website Settings")
-	if not ws.favicon:
-		ws.favicon = "/assets/pep_restaurant/pep-mark.svg"
+	if ws.favicon in OLD_FAVICONS:
+		ws.favicon = "/assets/pep_restaurant/restaurant.svg"
 		ws.flags.ignore_mandatory = True
 		ws.save(ignore_permissions=True)

@@ -63,7 +63,7 @@ export default function Shell({ children, bare }: { children: ReactNode; bare?: 
       <Offline />
       <aside className="no-print hidden w-[188px] shrink-0 flex-col border-r border-white/5 bg-chrome px-3 py-4 text-white md:flex">
         <div className="mb-4 flex items-center gap-2 px-1">
-          <img src={import.meta.env.BASE_URL + "pep-mark.svg"} alt="" className="size-7" />
+          <img src={import.meta.env.BASE_URL + "restaurant.svg"} alt="" className="size-10 shrink-0" />
           <span className="wide truncate text-sm font-bold">{restaurant?.restaurant_name ?? "Pep Restaurant"}</span>
         </div>
         <VenuePicker dark />
