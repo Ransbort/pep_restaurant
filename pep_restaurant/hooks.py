@@ -7,12 +7,12 @@ app_description = (
 )
 app_email = "ransbor82@gmail.com"
 app_license = "agpl-3.0"
-app_logo_url = "/assets/pep_restaurant/pep-mark.svg"
+app_logo_url = "/assets/pep_restaurant/restaurant.svg"
 
 add_to_apps_screen = [
 	{
 		"name": "pep_restaurant",
-		"logo": "/assets/pep_restaurant/pep-mark.svg",
+		"logo": "/assets/pep_restaurant/restaurant.svg",
 		"title": "Pep Restaurant",
 		"route": "/restaurant",
 	}
