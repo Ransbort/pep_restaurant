@@ -3,6 +3,7 @@ import { Plus } from "lucide-react"
 import { call, errText, P } from "../lib/api"
 import { useVenue } from "../lib/venue"
 import { useAuth } from "../lib/auth"
+import { LinkPicker } from "../components/LinkPicker"
 import { Button, Check, Empty, Field, Input, Modal, PageHead, Select, Tag, Textarea, useToast } from "../components/ui"
 
 type Doc = Record<string, string | number | null | undefined>
@@ -16,7 +17,7 @@ export default function Setup() {
   if (!who?.is_admin) return <Empty title="Only managers can change setup" />
 
   const openRestaurant = async (name?: string) => {
-    if (!name) return setEditR({ restaurant_name: "", currency: "INR", tax_label: "GST", tax_split: "CGST:50\nSGST:50", require_open_session: 1, prices_include_tax: 0, require_cashier_pin: 0, pin_max_attempts: 5, pin_lock_minutes: 15, reservation_before_min: 60, reservation_after_min: 240, receipt_footer: "Thank you! Visit again.", prep_stations: "Kitchen\nGrill\nFryer\nBar\nCold" })
+    if (!name) return setEditR({ restaurant_name: "", currency: "", tax_label: "GST", tax_split: "CGST:50\nSGST:50", require_open_session: 1, prices_include_tax: 0, require_cashier_pin: 0, pin_max_attempts: 5, pin_lock_minutes: 15, reservation_before_min: 60, reservation_after_min: 240, receipt_footer: "Thank you! Visit again.", prep_stations: "Kitchen\nGrill\nFryer\nBar\nCold" })
     try { setEditR(await call<Doc>(`${P}.api.get_restaurant`, { restaurant: name })) } catch (e) { toast(errText(e), "bad") }
   }
   const openOutlet = async (name?: string) => {
@@ -71,11 +72,11 @@ function useForm(doc: Doc) {
   useEffect(() => setV(doc), [doc])
   const text = (k: string) => ({ value: (v[k] ?? "") as string, onChange: (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value }) })
   const check = (k: string) => ({ checked: !!Number(v[k]), onChange: (x: boolean) => setV({ ...v, [k]: x ? 1 : 0 }) })
-  return { v, text, check }
+  return { v, setV, text, check }
 }
 
 function RestaurantModal({ doc, onClose, onSaved }: { doc: Doc; onClose: () => void; onSaved: (name: string) => void }) {
-  const { v, text, check } = useForm(doc)
+  const { v, setV, text, check } = useForm(doc)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState("")
   const save = async () => {
@@ -85,8 +86,8 @@ function RestaurantModal({ doc, onClose, onSaved }: { doc: Doc; onClose: () => v
   return (
     <Modal wide title={v.name ? `Edit ${doc.restaurant_name}` : "Add a restaurant"} onClose={onClose} footer={<Button busy={busy} onClick={save}>Save restaurant</Button>}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Name"><Input {...text("restaurant_name")} disabled={!!v.name} /></Field>
-        <Field label="Currency" hint="Three-letter code: INR, USD, AED…"><Input {...text("currency")} /></Field>
+        <Field label="Name" hint={v.name && v.restaurant_name !== doc.restaurant_name ? "Renaming keeps every outlet, order and setting with it." : undefined}><Input {...text("restaurant_name")} /></Field>
+        <Field label="Currency" hint="Search by code or name: GHS, Cedi, USD…"><LinkPicker kind="currency" value={(v.currency as string) || ""} onChange={(c) => setV({ ...v, currency: c })} placeholder="Pick a currency" /></Field>
         <Field label="Phone"><Input {...text("phone")} /></Field>
         <Field label="Tax ID" hint="Printed on bills (GSTIN, VAT no.)."><Input {...text("tax_id")} /></Field>
       </div>

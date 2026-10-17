@@ -83,7 +83,16 @@ def get_restaurant(restaurant: str):
 @frappe.whitelist(methods=["POST"])
 @require_roles()
 def save_restaurant(restaurant_name: str, name: str | None = None, **fields):
+	new_name = (restaurant_name or "").strip()[:140]
 	if name:
+		if not new_name:
+			frappe.throw(_("A restaurant needs a name."))
+		if new_name != name:
+			if frappe.db.exists("Restaurant", new_name):
+				frappe.throw(_("There is already a restaurant called {0}.").format(new_name))
+			# renames the record and rewrites everything that links to it:
+			# outlets, orders, menu, stock, shifts, user permissions
+			name = frappe.rename_doc("Restaurant", name, new_name, show_alert=False)
 		doc = frappe.get_doc("Restaurant", name)
 	else:
 		if not (restaurant_name or "").strip():
@@ -93,6 +102,10 @@ def save_restaurant(restaurant_name: str, name: str | None = None, **fields):
 	for k in RESTAURANT_FIELDS:
 		if k in fields:
 			doc.set(k, _coerce(k, fields[k]))
+	if not doc.currency:
+		doc.currency = frappe.db.get_default("currency") or "INR"
+	if not frappe.db.exists("Currency", doc.currency):
+		frappe.throw(_("Currency {0} isn't in the currency list.").format(doc.currency))
 	doc.save()
 	return {"ok": True, "name": doc.name}
 

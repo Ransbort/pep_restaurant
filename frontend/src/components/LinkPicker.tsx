@@ -5,7 +5,7 @@ import { cn } from "../lib/cn"
 import { inputCls } from "./ui"
 
 export type LinkKind =
-  | "customer" | "item" | "cost_center" | "mode_of_payment"
+  | "currency" | "customer" | "item" | "cost_center" | "mode_of_payment"
   | "income_account" | "service_account" | "tax_account"
 
 interface Hit { value: string; label?: string | null }

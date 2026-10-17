@@ -488,6 +488,8 @@ def options(company: str | None = None):
 # What each picker may offer, and how it's labelled. Kinds of account keep a
 # picker from offering, say, a bank account as the income account.
 _LINKS = {
+	# Currency is a Frappe core list, so this one works without ERPNext
+	"currency": ("Currency", {}, ["currency_name"], "currency_name"),
 	"customer": ("Customer", {"disabled": 0}, ["customer_name"], "customer_name"),
 	"item": ("Item", {"disabled": 0, "is_stock_item": 0, "is_sales_item": 1}, ["item_name"], "item_name"),
 	"cost_center": ("Cost Center", {"is_group": 0}, ["cost_center_name"], None),
@@ -506,10 +508,10 @@ def search_link(kind: str, txt: str = "", company: str | None = None, limit: int
 	"""Type-ahead for the Settings pickers: matches the ID or the display
 	name, prefix matches first, limited to valid choices for that field
 	(company-scoped where it applies). Returns [{value, label}]."""
-	if not erpnext_installed():
-		return []
 	if kind not in _LINKS:
 		frappe.throw(_("Unknown picker {0}.").format(kind))
+	if kind != "currency" and not erpnext_installed():
+		return []
 	doctype, base, extra, label_field = _LINKS[kind]
 	filters = dict(base)
 	if doctype in ("Account", "Cost Center"):
@@ -520,7 +522,8 @@ def search_link(kind: str, txt: str = "", company: str | None = None, limit: int
 	limit = max(1, min(cint(limit) or 20, 50))
 	fields = ["name", *([label_field] if label_field else [])]
 	if not txt:
-		rows = frappe.get_all(doctype, filters=filters, fields=fields, order_by="modified desc", limit=limit)
+		order = "enabled desc, name asc" if doctype == "Currency" else "modified desc"
+		rows = frappe.get_all(doctype, filters=filters, fields=fields, order_by=order, limit=limit)
 	else:
 		like = f"%{txt}%"
 		or_filters = {"name": ("like", like), **{f: ("like", like) for f in extra}}
