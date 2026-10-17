@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Download, Plus, Upload } from "lucide-react"
-import { downloadText, slug, toCsv } from "../lib/csv"
+import { downloadText, isFileDrag, readCsvFile, slug, toCsv } from "../lib/csv"
 import { call, errText, P, uploadImage } from "../lib/api"
 import { money, useVenue } from "../lib/venue"
 import { R, useAuth } from "../lib/auth"
@@ -21,6 +21,8 @@ export default function Dishes() {
   const [rows, setRows] = useState<Dish[]>([])
   const [edit, setEdit] = useState<Partial<Dish> | null>(null)
   const [importing, setImporting] = useState(false)
+  const [dropped, setDropped] = useState<File | null>(null)
+  const pageDrop = useFileDrop((f) => { setDropped(f); setImporting(true) }, canEditOf(has))
   const [q, setQ] = useState("")
   const canEdit = has(R.manager)
 
@@ -47,15 +49,21 @@ export default function Dishes() {
 
   if (!outlet) return <Empty title="No outlet yet">Create an outlet in Setup first.</Empty>
   return (
-    <>
+    <div {...pageDrop.handlers} className="min-h-[75vh]">
       <PageHead title="Menu" sub={`${outlet.outlet_name} · ${rows.length} dishes · ${rows.filter((r) => !r.available).length} off today`}
         actions={canEdit && <>
+          <Button variant="ghost" onClick={() => downloadTemplate(stations)}><Download className="size-4" />CSV template</Button>
           <Button variant="outline" onClick={() => setImporting(true)}><Upload className="size-4" />Import CSV</Button>
           <Button onClick={() => setEdit({ ...BLANK })}><Plus className="size-4" />Add dish</Button>
         </>} />
       <Input placeholder="Find a dish" value={q} onChange={(e) => setQ(e.target.value)} className="mb-4 max-w-xs" />
-      {!rows.length && <Empty title="This menu is empty" action={canEdit && <Button onClick={() => setEdit({ ...BLANK })}>Add the first dish</Button>}>
-        Add dishes one by one, or paste a whole menu as CSV.</Empty>}
+      {!rows.length && <Empty title="This menu is empty" action={canEdit && (
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button onClick={() => setEdit({ ...BLANK })}>Add the first dish</Button>
+          <Button variant="outline" onClick={() => setImporting(true)}><Upload className="size-4" />Import a menu</Button>
+          <Button variant="ghost" onClick={() => downloadTemplate(stations)}><Download className="size-4" />Download CSV template</Button>
+        </div>)}>
+        Add dishes one by one, or fill in the CSV template in Excel or Google Sheets and import the whole menu.</Empty>}
       <div className="space-y-6">
         {groups.map(([cat, list]) => (
           <section key={cat}>
@@ -81,8 +89,10 @@ export default function Dishes() {
         ))}
       </div>
       {edit && <DishModal dish={edit} outlet={outlet.name} categories={categories} stations={stations} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />}
-      {importing && <ImportModal outlet={outlet.name} outletName={outlet.outlet_name} stations={stations} dishes={rows} onClose={() => setImporting(false)} onDone={() => { setImporting(false); load() }} />}
-    </>
+      {importing && <ImportModal outlet={outlet.name} outletName={outlet.outlet_name} stations={stations} dishes={rows} initialFile={dropped}
+        onClose={() => { setImporting(false); setDropped(null) }} onDone={() => { setImporting(false); setDropped(null); load() }} />}
+      {!importing && pageDrop.over && <DropOverlay label={`Drop to import into ${outlet.outlet_name}`} />}
+    </div>
   )
 }
 
@@ -150,8 +160,19 @@ const COLUMNS: [string, string, string][] = [
 const HEADER = COLUMNS.map(([c]) => c)
 const yn = (v: unknown) => (Number(v) ? "yes" : "no")
 
-function ImportModal({ outlet, outletName, stations, dishes, onClose, onDone }: {
-  outlet: string; outletName: string; stations: string[]; dishes: Dish[]; onClose: () => void; onDone: () => void
+/** A CSV with every column and example rows that use this restaurant's own stations. */
+function downloadTemplate(stations: string[]) {
+  const st = (i: number) => stations[Math.min(i, stations.length - 1)] ?? "Kitchen"
+  downloadText("pep-menu-template.csv", toCsv(HEADER, [
+    ["Masala Dosa", 160, "Breakfast", "Main", st(0), "yes", "no", "yes", "Gluten", "Crisp rice crepe, potato masala, chutneys", 1],
+    ["Chicken Wings", 320, "Starters", "Starter", stations.find((s) => /fry/i.test(s)) ?? st(1), "no", "no", "yes", "", "", 2],
+    ["Chocolate Brownie", 180, "Desserts", "Dessert", stations.find((s) => /cold|pastry/i.test(s)) ?? st(0), "yes", "no", "yes", "Nuts, Dairy, Gluten", "Warm, with ice cream", 3],
+    ["Fresh Lime Soda", 110, "Drinks", "Drink", stations.find((s) => /bar/i.test(s)) ?? st(0), "yes", "no", "yes", "", "", 4],
+  ]))
+}
+
+function ImportModal({ outlet, outletName, stations, dishes, initialFile, onClose, onDone }: {
+  outlet: string; outletName: string; stations: string[]; dishes: Dish[]; initialFile?: File | null; onClose: () => void; onDone: () => void
 }) {
   const [text, setText] = useState("")
   const [fileName, setFileName] = useState("")
@@ -160,28 +181,26 @@ function ImportModal({ outlet, outletName, stations, dishes, onClose, onDone }: 
   const [res, setRes] = useState<{ created: number; updated: number; errors: { line: number; item: string; error: string }[] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState("")
-  const st = (i: number) => stations[Math.min(i, stations.length - 1)] ?? "Kitchen"
-
-  const template = () => downloadText("pep-menu-template.csv", toCsv(HEADER, [
-    ["Masala Dosa", 160, "Breakfast", "Main", st(0), "yes", "no", "yes", "Gluten", "Crisp rice crepe, potato masala, chutneys", 1],
-    ["Chicken Wings", 320, "Starters", "Starter", stations.find((s) => /fry/i.test(s)) ?? st(1), "no", "no", "yes", "", "", 2],
-    ["Chocolate Brownie", 180, "Desserts", "Dessert", stations.find((s) => /cold|pastry/i.test(s)) ?? st(0), "yes", "no", "yes", "Nuts, Dairy, Gluten", "Warm, with ice cream", 3],
-    ["Fresh Lime Soda", 110, "Drinks", "Drink", stations.find((s) => /bar/i.test(s)) ?? st(0), "yes", "no", "yes", "", "", 4],
-  ]))
+  const template = () => downloadTemplate(stations)
   const exportMenu = () => downloadText(`${slug(outletName)}-menu.csv`, toCsv(HEADER, dishes.map((d) => [
     d.item_name, d.price, d.category, d.course, d.prep_station, yn(d.is_veg), yn(d.is_alcohol), yn(d.available),
     d.allergens, d.description, d.sort_order,
   ])))
-  const readFile = async (f?: File) => {
+  const readFile = async (f?: File | null) => {
     if (!f) return
-    setText(await f.text()); setFileName(f.name); setRes(null); setErr("")
+    setRes(null); setErr("")
+    try { setText(await readCsvFile(f)); setFileName(f.name) } catch (e) { setErr(errText(e)) }
   }
+  useEffect(() => { readFile(initialFile) }, [initialFile]) // a file dropped on the Menu page
+  const drop = useFileDrop(readFile, true)
   const go = async () => {
     setBusy(true); setErr("")
     try { setRes(await call(`${P}.menu.import_csv`, { outlet, csv_text: text, update_existing: update ? 1 : 0 })) } catch (e) { setErr(errText(e)) } finally { setBusy(false) }
   }
   const lines = text.trim() ? text.trim().split(/\r?\n/).length - 1 : 0
   return (
+    <div {...drop.handlers}>
+    {drop.over && <DropOverlay label="Drop the CSV to load it" />}
     <Modal wide title={`Import a menu into ${outletName}`} onClose={onClose}
       footer={res ? <Button onClick={onDone}>Done</Button> : <><Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button busy={busy} disabled={!lines} onClick={go}>Import {lines ? `${lines} dish${lines === 1 ? "" : "es"}` : ""}</Button></>}>
@@ -194,10 +213,10 @@ function ImportModal({ outlet, outletName, stations, dishes, onClose, onDone }: 
             {dishes.length > 0 && <Button size="sm" variant="ghost" onClick={exportMenu}><Download className="size-3.5" />Current menu ({dishes.length})</Button>}
           </div>
         </div>
-        <label className="cursor-pointer rounded-xl border-2 border-dashed border-line p-3 hover:border-ink-2"
-          onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); readFile(e.dataTransfer.files[0]) }}>
+        <label className={cn("cursor-pointer rounded-xl border-2 border-dashed p-3 transition",
+          drop.over ? "border-brand bg-brand-soft" : fileName ? "border-basil bg-basil-soft/50" : "border-line hover:border-ink-2")}>
           <p className="text-sm font-semibold">2. Upload it</p>
-          <p className="mt-0.5 text-xs text-mute">{fileName ? `Loaded ${fileName}` : "Choose or drop the CSV file here - or paste below."}</p>
+          <p className="mt-0.5 text-xs text-mute">{fileName ? <>Loaded <b className="text-ink">{fileName}</b> - drop another to replace it.</> : "Drag the CSV file anywhere onto this box, choose it, or paste below."}</p>
           <span className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink px-2.5 text-xs font-semibold text-paper"><Upload className="size-3.5" />Choose file</span>
           <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => readFile(e.target.files?.[0])} />
         </label>
@@ -230,5 +249,47 @@ function ImportModal({ outlet, outletName, stations, dishes, onClose, onDone }: 
       )}
       {err && <p className="text-sm text-chili">{err}</p>}
     </Modal>
+    </div>
+  )
+}
+
+const canEditOf = (has: (...r: string[]) => boolean) => has(R.manager)
+
+/** Drag-and-drop for files. A depth counter keeps the highlight steady while
+ *  the pointer crosses child elements (each fires its own enter/leave). */
+function useFileDrop(onFile: (f: File) => void, enabled: boolean) {
+  const [over, setOver] = useState(false)
+  const depth = useRef(0)
+  const handlers = enabled ? {
+    onDragEnter: (e: React.DragEvent) => {
+      if (!isFileDrag(e)) return
+      e.preventDefault(); e.stopPropagation(); depth.current += 1; setOver(true)
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (!isFileDrag(e)) return
+      e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!isFileDrag(e)) return
+      e.stopPropagation()
+      depth.current = Math.max(0, depth.current - 1)
+      if (!depth.current) setOver(false)
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!isFileDrag(e)) return
+      e.preventDefault(); e.stopPropagation()
+      depth.current = 0; setOver(false)
+      const f = e.dataTransfer.files[0]
+      if (f) onFile(f)
+    },
+  } : {}
+  return { over, handlers }
+}
+
+function DropOverlay({ label }: { label: string }) {
+  return (
+    <div className="pointer-events-none fixed inset-3 z-[70] flex items-center justify-center rounded-2xl border-4 border-dashed border-brand bg-brand-soft/85">
+      <p className="flex items-center gap-2 rounded-xl bg-card px-5 py-3 text-lg font-bold shadow-xl"><Upload className="size-5" />{label}</p>
+    </div>
   )
 }

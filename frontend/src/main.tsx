@@ -9,6 +9,16 @@ import { initTheme } from "./lib/theme"
 
 initTheme()
 
+// A file dropped anywhere the app doesn't expect it would make the browser
+// open it and leave the app. Screens that accept drops handle them first.
+for (const type of ["dragover", "drop"] as const)
+  window.addEventListener(type, (e) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) {
+      e.preventDefault()
+      if (type === "dragover") e.dataTransfer.dropEffect = "none"
+    }
+  })
+
 // Served at /restaurant in production; at / by the Vite dev server.
 const basename = location.pathname.startsWith("/restaurant") ? "/restaurant" : "/"
 
