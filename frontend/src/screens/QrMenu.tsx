@@ -3,11 +3,12 @@ import { useParams, useSearchParams } from "react-router-dom"
 import { Minus, Plus, ShoppingBag } from "lucide-react"
 import { callGuest, errText, P } from "../lib/api"
 import { money, setMoney } from "../lib/venue"
+import { applyAccent } from "../lib/theme"
 import { cn } from "../lib/cn"
 import { Button, Field, Input, Modal } from "../components/ui"
 
 interface Item { name: string; item_name: string; category: string; price: number; is_veg: 0 | 1; is_alcohol: 0 | 1; image?: string; description?: string; allergens?: string }
-interface Menu { outlet_name: string; restaurant_name: string; currency: string; currency_symbol?: string; logo?: string; prices_include_tax: 0 | 1; ordering: boolean; categories: { category: string; items: Item[] }[] }
+interface Menu { accent_color?: string; outlet_name: string; restaurant_name: string; currency: string; currency_symbol?: string; logo?: string; prices_include_tax: 0 | 1; ordering: boolean; categories: { category: string; items: Item[] }[] }
 
 export default function QrMenu() {
   const { outlet = "" } = useParams()
@@ -20,7 +21,7 @@ export default function QrMenu() {
   const [checkout, setCheckout] = useState(false)
   const [placed, setPlaced] = useState<string | null>(null)
   useEffect(() => {
-    callGuest<Menu>(`${P}.public_api.qr_menu`, { outlet }).then((m) => { setMoney(m.currency, m.currency_symbol); setMenu(m); document.title = m.restaurant_name }).catch((e) => setErr(errText(e)))
+    callGuest<Menu>(`${P}.public_api.qr_menu`, { outlet }).then((m) => { setMoney(m.currency, m.currency_symbol); applyAccent(m.accent_color); setMenu(m); document.title = m.restaurant_name }).catch((e) => setErr(errText(e)))
   }, [outlet])
   const items = useMemo(() => Object.fromEntries((menu?.categories ?? []).flatMap((c) => c.items).map((i) => [i.name, i])), [menu])
   const count = Object.values(cart).reduce((s, n) => s + n, 0)
@@ -38,7 +39,7 @@ export default function QrMenu() {
   )
   return (
     <div className="mx-auto min-h-full max-w-xl bg-card pb-28">
-      <header className="bg-ink px-5 pb-6 pt-8 text-white">
+      <header className="bg-chrome px-5 pb-6 pt-8 text-white">
         {menu.logo && <img src={menu.logo} alt="" className="mb-3 size-12 rounded-xl object-cover" />}
         <h1 className="wide text-3xl font-extrabold leading-tight">{menu.restaurant_name}</h1>
         <p className="mt-1 text-sm text-white/70">{menu.outlet_name}{table ? ` · Table ${table}` : ""}</p>
@@ -65,7 +66,7 @@ export default function QrMenu() {
                   <div className="flex w-24 shrink-0 flex-col items-center gap-2">
                     {i.image && <img src={i.image} alt="" className="size-20 rounded-xl object-cover" />}
                     {menu.ordering && (cart[i.name]
-                      ? <div className="flex items-center rounded-lg bg-ink text-white">
+                      ? <div className="flex items-center rounded-lg bg-ink text-paper">
                           <button aria-label="One less" className="p-2" onClick={() => bump(i.name, -1)}><Minus className="size-4" /></button>
                           <span className="num w-5 text-center font-bold">{cart[i.name]}</span>
                           <button aria-label="One more" className="p-2" onClick={() => bump(i.name, 1)}><Plus className="size-4" /></button>

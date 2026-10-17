@@ -3,16 +3,27 @@
 @theme {
   --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  /* Pep: charcoal ink, cool paper, saffron brand */
+  /* Surfaces and ink - remapped wholesale in .dark */
   --color-ink: #1d2733;
   --color-ink-2: #3b4757;
   --color-mute: #6b7686;
   --color-line: #dfe3e8;
   --color-paper: #f3f5f7;
   --color-card: #ffffff;
-  --color-saffron: #f2a900;
-  --color-saffron-soft: #fff3d1;
-  --color-saffron-deep: #9a6b00;
+  /* the sidebar / hero band: dark in both themes */
+  --color-chrome: #1d2733;
+
+  /* Brand: one accent colour per restaurant (Settings), set at runtime as
+     --accent. Soft and deep shades are mixed from it, so any colour works. */
+  --color-brand: var(--accent, #f2a900);
+  --color-brand-soft: color-mix(in oklab, var(--accent, #f2a900) 18%, var(--color-card));
+  --color-brand-deep: color-mix(in oklab, var(--accent, #f2a900) 62%, var(--color-ink));
+  --color-on-brand: var(--on-accent, #1d2733);
+
+  /* Status colours - fixed meaning, never follow the brand */
+  --color-amber: #e8a100;
+  --color-amber-soft: #fff3d1;
+  --color-amber-deep: #8a5f00;
   --color-chili: #c62f3a;
   --color-chili-soft: #fde7e8;
   --color-basil: #1f7a4c;
@@ -21,6 +32,29 @@
   --color-sky-soft: #e3eefb;
   --color-plum: #6d3fb3;
   --color-plum-soft: #efe7fb;
+}
+
+/* Dark appearance. Status hues stay mid-tone so white text on them still
+   reads; their soft tints and text tones flip to sit on dark cards. */
+.dark {
+  color-scheme: dark;
+  --color-ink: #eef1f5;
+  --color-ink-2: #c7ced8;
+  --color-mute: #8d97a5;
+  --color-line: #2c3440;
+  --color-paper: #12161c;
+  --color-card: #1b212a;
+  --color-chrome: #0c0f13;
+  --color-amber-soft: #3a2e10;
+  --color-amber-deep: #f5c451;
+  --color-chili: #d9444f;
+  --color-chili-soft: #3d1a1e;
+  --color-basil: #23875a;
+  --color-basil-soft: #13301f;
+  --color-sky: #4d8ad6;
+  --color-sky-soft: #142a44;
+  --color-plum: #8a5cd0;
+  --color-plum-soft: #2b1f42;
 }
 
 html, body, #root { height: 100%; }
@@ -34,22 +68,13 @@ body {
 .wide { font-stretch: 112%; }
 .narrow { font-stretch: 80%; }
 
-:focus-visible { outline: 3px solid var(--color-saffron); outline-offset: 2px; border-radius: 6px; }
+:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 2px; border-radius: 6px; }
 
-/* kitchen display: always dark - kitchens run screens at night */
-.kds {
-  --color-paper: #12161c;
-  --color-card: #1b212a;
-  --color-line: #2c3440;
-  --color-ink: #eef1f5;
-  --color-ink-2: #c7ced8;
-  --color-mute: #8d97a5;
-  background: var(--color-paper);
-  color: var(--color-ink);
-}
+/* kitchen display: dark by default (Settings can make it follow the app) */
+.kds { background: var(--color-paper); color: var(--color-ink); }
 
 .cleaning-stripes {
-  background-image: repeating-linear-gradient(135deg, transparent 0 8px, rgba(29,39,51,.06) 8px 16px);
+  background-image: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in oklab, var(--color-ink) 7%, transparent) 8px 16px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -59,4 +84,7 @@ body {
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
+  /* paper is always white: print in the light palette */
+  .dark { color-scheme: light; --color-ink: #1d2733; --color-ink-2: #3b4757; --color-mute: #6b7686;
+          --color-line: #dfe3e8; --color-paper: #ffffff; --color-card: #ffffff; }
 }

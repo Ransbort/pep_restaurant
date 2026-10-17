@@ -76,10 +76,10 @@
   },
   {
    "default": "Kitchen",
+   "description": "Where it is cooked - one of the restaurant's kitchen stations.",
    "fieldname": "prep_station",
-   "fieldtype": "Select",
-   "label": "Prep Station",
-   "options": "Kitchen\nTandoor\nGrill\nFryer\nBar\nCold"
+   "fieldtype": "Data",
+   "label": "Station"
   },
   {
    "default": "1",
@@ -145,7 +145,7 @@
  "image_field": "image",
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-16 12:00:00.000000",
+ "modified": "2026-10-17 19:30:00.000000",
  "modified_by": "Administrator",
  "module": "Pep Restaurant",
  "name": "Pep Menu Item",

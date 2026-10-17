@@ -57,10 +57,40 @@ permission to see nothing at all.
 - **reports**: sales, tenders, hourly sales, best sellers, kitchen speed,
   NC, discounts, voids and cancellations.
 - **qr**: printable table QR sheet. The codes are drawn in the browser.
+- **settings**: appearance per device (Light, Dark or Match device), whether
+  the kitchen screen stays dark, and the restaurant's accent colour (ten
+  presets or any hex) with a live preview. The accent is saved on the
+  restaurant, so every till and the guest QR menu use it. Status colours
+  (in kitchen, ready, late, errors) keep their meaning whatever the accent.
 - **setup**: restaurants (currency, tax label/split, tax-inclusive prices,
   PIN and shift rules) and outlets (tax %, service charge, auto KOT, QR
   ordering, tables).
 - **menu/:outlet?table=T4**: the public guest menu.
+
+## Kitchen stations
+
+A station is a spot in the kitchen where a cook works one kind of food. Each
+dish is cooked at one station, and each kitchen screen can show just one
+station, so the grill cook only sees grill work.
+
+- Edit the list per restaurant in **Setup → Edit → Kitchen stations**, one per
+  line (defaults: Kitchen, Tandoor, Grill, Fryer, Bar, Cold). Rename or add
+  freely (Pizza Oven, Wok, Pastry). A station that still has dishes can't be
+  removed until they move.
+- Assign each dish in **Menu → dish → Station**, or with the `prep_station`
+  column in a CSV import.
+- Put a tablet at each station, open `/restaurant/kitchen`, and tap that
+  station's chip. The choice is remembered on that device. The pass or
+  expediter screen stays on **All**.
+- The KOT slip prints every line with its station in brackets.
+
+## Menu import
+
+**Menu → Import CSV** offers a template download (with example rows that use
+your own stations) and a download of the current menu, so you can edit it in
+Excel or Google Sheets and re-import it. Files saved by Excel (UTF-8 with BOM,
+or semicolon-separated) are accepted. Rows that fail are reported by line
+number; the rest still import.
 
 ## Rules carried over from Kamra
 

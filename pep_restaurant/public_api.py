@@ -21,13 +21,13 @@ def _public_outlet(outlet: str):
 def qr_menu(outlet: str):
 	o = _public_outlet(outlet)
 	rest = frappe.db.get_value("Pep Restaurant", o.restaurant,
-	                           ["restaurant_name", "currency", "logo", "prices_include_tax", "disabled"], as_dict=True)
+	                           ["restaurant_name", "currency", "logo", "prices_include_tax", "disabled", "accent_color"], as_dict=True)
 	if not rest or rest.disabled:
 		frappe.throw(_("This menu isn't available."))
 	return {
 		"outlet": outlet, "outlet_name": o.outlet_name, "restaurant_name": rest.restaurant_name,
 		"currency": rest.currency, "currency_symbol": frappe.db.get_value("Currency", rest.currency, "symbol"),
-		"logo": rest.logo, "prices_include_tax": rest.prices_include_tax, "ordering": bool(o.qr_ordering),
+		"logo": rest.logo, "accent_color": rest.accent_color, "prices_include_tax": rest.prices_include_tax, "ordering": bool(o.qr_ordering),
 		"categories": _menu(outlet, guest=True),
 	}
 

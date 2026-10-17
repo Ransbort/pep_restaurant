@@ -43,7 +43,7 @@ const TILE: Record<TileState, string> = {
   cleaning: "bg-paper border-line text-mute cleaning-stripes",
   new_qr: "bg-plum text-white border-plum",
   running: "bg-sky-soft border-sky/40 text-sky",
-  fired: "bg-saffron-soft border-saffron text-saffron-deep",
+  fired: "bg-amber-soft border-amber text-amber-deep",
   ready: "bg-basil text-white border-basil",
 }
 const STATE_LABEL: Record<TileState, string> = {
@@ -238,7 +238,7 @@ export default function Till() {
             <div className="mb-2 flex flex-wrap gap-1">
               {areas.map((a) => (
                 <button key={a} onClick={() => setArea(a)} className={cn("rounded-full px-2.5 py-1 text-xs font-semibold",
-                  area === a ? "bg-ink text-white" : "bg-card text-ink-2")}>{a}</button>
+                  area === a ? "bg-ink text-paper" : "bg-card text-ink-2")}>{a}</button>
               ))}
             </div>
           )}
@@ -248,7 +248,7 @@ export default function Till() {
               <button key={t.table} onClick={() => openTile(t)}
                 className={cn("relative flex min-h-[78px] flex-col rounded-xl border-2 p-2 text-left transition active:scale-[.97]",
                   TILE[t.state], selTable === t.table && "ring-3 ring-ink ring-offset-2 ring-offset-paper")}>
-                {t.bills > 1 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-ink px-1.5 text-[10px] font-bold text-white">{t.bills}</span>}
+                {t.bills > 1 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-ink px-1.5 text-[10px] font-bold text-paper">{t.bills}</span>}
                 <span className="flex items-baseline justify-between">
                   <span className="wide text-lg font-extrabold leading-none">{t.table}</span>
                   {t.since && <span className="text-[10px] font-semibold opacity-75">{ago(t.since)}</span>}
@@ -298,20 +298,20 @@ export default function Till() {
               <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
                 {menu.map((c) => (
                   <button key={c.category} onClick={() => setCat(c.category)} className={cn("shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold",
-                    cat === c.category ? "bg-ink text-white" : "bg-paper text-ink-2 hover:bg-line")}>{c.category}</button>
+                    cat === c.category ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-line")}>{c.category}</button>
                 ))}
               </div>
             )}
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-3">
-            {!sel && <p className="mb-3 rounded-lg bg-saffron-soft px-3 py-2 text-sm font-medium text-saffron-deep">Pick a table on the floor, or start a takeaway, to add items.</p>}
+            {!sel && <p className="mb-3 rounded-lg bg-amber-soft px-3 py-2 text-sm font-medium text-amber-deep">Pick a table on the floor, or start a takeaway, to add items.</p>}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
               {shown.map((m) => {
                 const inCart = draft.filter((d) => d.menu_item === m.name).reduce((s, d) => s + d.qty, 0)
                 return (
                   <button key={m.name} onClick={() => add(m)} disabled={closed}
                     className="relative flex min-h-[86px] flex-col rounded-xl border border-line bg-card p-2.5 text-left transition hover:border-ink-2 active:scale-[.97] disabled:opacity-40">
-                    {inCart > 0 && <span className="absolute right-2 top-2 rounded-md bg-saffron px-1.5 text-xs font-extrabold text-ink">{inCart}</span>}
+                    {inCart > 0 && <span className="absolute right-2 top-2 rounded-md bg-brand px-1.5 text-xs font-extrabold text-on-brand">{inCart}</span>}
                     <span className="flex items-center gap-1.5 pr-6">
                       <span aria-label={m.is_veg ? "Veg" : "Non-veg"} className={cn("size-2.5 shrink-0 rounded-sm border-2", m.is_veg ? "border-basil" : "border-chili")} />
                       <span className="text-sm font-semibold leading-tight">{m.item_name}</span>
@@ -397,8 +397,8 @@ export default function Till() {
                   </div>
                 ))}
                 {draft.length > 0 && (
-                  <div className="mt-1 rounded-xl border-2 border-dashed border-saffron bg-saffron-soft/40 p-1.5">
-                    <p className="px-1.5 pb-1 text-[11px] font-bold text-saffron-deep">{order ? "New round - not sent" : "Not sent yet"}</p>
+                  <div className="mt-1 rounded-xl border-2 border-dashed border-brand bg-brand-soft/40 p-1.5">
+                    <p className="px-1.5 pb-1 text-[11px] font-bold text-brand-deep">{order ? "New round - not sent" : "Not sent yet"}</p>
                     {draft.map((d) => (
                       <div key={d.key} className="flex items-start gap-2 rounded-lg px-1.5 py-1">
                         <div className="flex shrink-0 items-center rounded-lg bg-card">
@@ -531,7 +531,7 @@ export default function Till() {
 
 function LineStatus({ s }: { s: Line["kot_status"] }) {
   if (s === "New") return <span className="font-semibold text-sky">Not sent</span>
-  if (s === "Fired") return <span className="font-semibold text-saffron-deep">Cooking</span>
+  if (s === "Fired") return <span className="font-semibold text-amber-deep">Cooking</span>
   return <span className="font-semibold text-basil">Ready</span>
 }
 function Row({ l, v, muted }: { l: string; v: number; muted?: boolean }) {
@@ -629,7 +629,7 @@ function PayModal({ order, onClose, onPaid, pinned }: { order: Order; onClose: (
         <>
           <div className="grid grid-cols-3 gap-2">
             {MODES.map((m) => (
-              <button key={m} onClick={() => setMode(m)} className={cn("h-12 rounded-xl border-2 text-sm font-bold", mode === m ? "border-ink bg-ink text-white" : "border-line")}>{m}</button>
+              <button key={m} onClick={() => setMode(m)} className={cn("h-12 rounded-xl border-2 text-sm font-bold", mode === m ? "border-ink bg-ink text-paper" : "border-line")}>{m}</button>
             ))}
           </div>
           {mode === "Cash" && (
@@ -705,7 +705,7 @@ function ReasonModal({ title, fields, confirm, onClose, onSubmit, danger, note, 
   }
   return (
     <Modal title={title} onClose={onClose} footer={<><Button variant="ghost" onClick={onClose}>Back</Button><Button variant={danger ? "danger" : "ink"} busy={busy} onClick={go}>{confirm}</Button></>}>
-      {note && <p className="rounded-lg bg-saffron-soft px-3 py-2 text-sm text-saffron-deep">{note}</p>}
+      {note && <p className="rounded-lg bg-amber-soft px-3 py-2 text-sm text-amber-deep">{note}</p>}
       {fields.map(([k, label, ph]) => (
         <Field key={k} label={label}>
           <Input list={options?.[k] ? `opt-${k}` : undefined} value={v[k] ?? ""} placeholder={ph} onChange={(e) => setV({ ...v, [k]: e.target.value })}

@@ -12,7 +12,6 @@ from pep_restaurant.authz import FLOOR_ROLES, KITCHEN_ROLES, require_roles
 FIELDS = ("item_name", "category", "price", "course", "prep_station", "is_veg", "is_alcohol", "available",
           "allergens", "description", "image", "sort_order")
 COURSES = ("Starter", "Main", "Dessert", "Drink")
-STATIONS = ("Kitchen", "Tandoor", "Grill", "Fryer", "Bar", "Cold")
 
 
 @frappe.whitelist()
@@ -42,8 +41,6 @@ def save_menu_item(outlet: str, item_name: str, price: float, name: str | None =
 				v = cint(v)
 			elif k == "course" and v not in COURSES:
 				v = "Main"
-			elif k == "prep_station" and v not in STATIONS:
-				v = "Kitchen"
 			elif isinstance(v, str):
 				v = v.strip() or None
 			doc.set(k, v)
@@ -79,7 +76,11 @@ def import_csv(outlet: str, csv_text: str, update_existing: int = 1):
 	"""Paste a menu: a header row with at least item_name and price, and any of
 	category, course, prep_station, is_veg, is_alcohol, allergens, description.
 	Existing dishes (same name, same outlet) are updated when update_existing."""
-	reader = csv.DictReader(io.StringIO((csv_text or "").strip()))
+	text = (csv_text or "").lstrip("\ufeff").strip()  # Excel's UTF-8 BOM
+	first = text.splitlines()[0] if text else ""
+	# Excel in many locales saves "CSV" with semicolons
+	delimiter = ";" if first.count(";") > first.count(",") else ","
+	reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
 	if not reader.fieldnames:
 		frappe.throw(_("Paste a CSV with a header row."))
 	headers = {h.strip().lower().replace(" ", "_"): h for h in reader.fieldnames if h}

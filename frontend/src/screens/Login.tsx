@@ -29,14 +29,14 @@ export default function Login() {
   }
   return (
     <div className="grid min-h-full md:grid-cols-[1.1fr_1fr]">
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-ink p-10 text-white md:flex">
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-chrome p-10 text-white md:flex">
         <div className="flex items-center gap-2.5">
           <img src={import.meta.env.BASE_URL + "pep-mark.svg"} alt="" className="size-9" />
           <span className="wide text-lg font-bold">Pep Restaurant</span>
         </div>
         <div>
           <p className="wide max-w-md text-5xl font-extrabold leading-[1.02] tracking-tight">
-            Table 4 wants the bill.<br /><span className="text-saffron">Table 7 just sat down.</span>
+            Table 4 wants the bill.<br /><span className="text-brand">Table 7 just sat down.</span>
           </p>
           <p className="mt-5 max-w-sm text-white/65">Tables, tickets, the pass and the till - on one screen your floor can keep up with.</p>
         </div>

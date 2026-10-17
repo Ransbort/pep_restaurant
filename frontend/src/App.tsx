@@ -15,6 +15,7 @@ const Cash = lazy(() => import("./screens/Cash"))
 const Reports = lazy(() => import("./screens/Reports"))
 const QrCodes = lazy(() => import("./screens/QrCodes"))
 const Setup = lazy(() => import("./screens/Setup"))
+const Settings = lazy(() => import("./screens/Settings"))
 const QrMenu = lazy(() => import("./screens/QrMenu"))
 
 const Loading = () => <div className="flex h-full items-center justify-center text-sm text-mute">Loading…</div>
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="/reports" element={<Authed><Shell><Reports /></Shell></Authed>} />
         <Route path="/qr" element={<Authed><Shell><QrCodes /></Shell></Authed>} />
         <Route path="/setup" element={<Authed><Shell><Setup /></Shell></Authed>} />
+        <Route path="/settings" element={<Authed><Shell><Settings /></Shell></Authed>} />
         <Route path="*" element={<Authed><Home /></Authed>} />
       </Routes>
     </Suspense>

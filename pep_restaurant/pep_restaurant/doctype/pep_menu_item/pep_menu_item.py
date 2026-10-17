@@ -9,6 +9,16 @@ from frappe.model.document import Document
 class PepMenuItem(Document):
 	def validate(self):
 		self.restaurant = frappe.db.get_value("Pep Outlet", self.outlet, "restaurant")
+		from pep_restaurant.pep_restaurant.doctype.pep_restaurant.pep_restaurant import parse_stations
+
+		stations = parse_stations(frappe.db.get_value("Pep Restaurant", self.restaurant, "prep_stations"))
+		match = next((s for s in stations if s.lower() == (self.prep_station or "").strip().lower()), None)
+		if not (self.prep_station or "").strip():
+			match = stations[0]
+		if not match:
+			frappe.throw(_("{0} isn't one of this restaurant's kitchen stations ({1}). Add it in Setup, or pick another.")
+			             .format(self.prep_station, ", ".join(stations)))
+		self.prep_station = match
 		if (self.price or 0) < 0:
 			frappe.throw(_("Price cannot be negative."))
 		seen = set()

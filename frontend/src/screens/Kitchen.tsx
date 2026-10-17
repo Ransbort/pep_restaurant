@@ -6,6 +6,7 @@ import { useLive } from "../lib/realtime"
 import { useVenue } from "../lib/venue"
 import { cn } from "../lib/cn"
 import { useToast } from "../components/ui"
+import { getKitchenMode } from "../lib/theme"
 
 type LineState = "cooking" | "held" | "cancelled" | "done"
 interface KItem {
@@ -18,7 +19,6 @@ interface KOrder {
   allergy_note?: string; notes?: string; accepted_at?: string; held_courses: string[]; items: KItem[]; nc: 0 | 1
 }
 
-const STATIONS = ["All", "Kitchen", "Tandoor", "Grill", "Fryer", "Bar", "Cold"]
 const AMBER_AT = 8
 const LATE_AT = 15
 const lsGet = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
@@ -45,10 +45,20 @@ export default function Kitchen() {
   const toast = useToast()
   const [orders, setOrders] = useState<KOrder[]>([])
   const [scope, setScope] = useState<"outlet" | "all">((lsGet("pep.kds.scope") as "outlet" | "all") || "outlet")
-  const [station, setStation] = useState(lsGet("pep.kds.station") || "All")
+  const stations = ["All", ...(restaurant?.prep_stations ?? [])]
+  const saved = lsGet("pep.kds.station") || "All"
+  // a station removed in Setup falls back to everything
+  const [station, setStation] = useState(saved)
+  useEffect(() => { if (restaurant && !stations.includes(station)) setStation("All") }, [restaurant, station])
   const [sound, setSound] = useState(lsGet("pep.kds.sound") !== "0")
   const [, tick] = useState(0)
   const seen = useRef<Set<string> | null>(null)
+  const [kdsMode, setKdsMode] = useState(getKitchenMode())
+  useEffect(() => {
+    const h = () => setKdsMode(getKitchenMode())
+    window.addEventListener("pep:theme", h)
+    return () => window.removeEventListener("pep:theme", h)
+  }, [])
 
   const load = useCallback(async () => {
     if (!restaurant) return
@@ -74,18 +84,18 @@ export default function Kitchen() {
   const counts = orders.reduce((s, o) => s + o.items.filter((i) => i.state === "cooking").length, 0)
 
   return (
-    <div className="kds flex min-h-full flex-col">
+    <div className={cn("kds flex min-h-full flex-col", kdsMode === "dark" && "dark")}>
       <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
         <Link to="/" className="rounded-md p-1.5 text-mute hover:text-ink" aria-label="Back"><ArrowLeft className="size-5" /></Link>
         <h1 className="wide mr-2 text-xl font-extrabold">Kitchen</h1>
-        <span className="rounded-md bg-saffron px-2 py-0.5 text-sm font-extrabold text-[#1d2733]">{counts} to cook</span>
+        <span className="rounded-md bg-brand px-2 py-0.5 text-sm font-extrabold text-on-brand">{counts} to cook</span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <select aria-label="Which outlets" value={scope} onChange={(e) => { setScope(e.target.value as "outlet" | "all"); lsSet("pep.kds.scope", e.target.value) }}
             className="rounded-md border border-line bg-card px-2 py-1.5 text-sm">
             <option value="outlet">{outlet?.outlet_name ?? "This outlet"}</option>
             <option value="all">All outlets</option>
           </select>
-          {STATIONS.map((s) => (
+          {stations.map((s) => (
             <button key={s} onClick={() => { setStation(s); lsSet("pep.kds.station", s) }}
               className={cn("rounded-md px-2.5 py-1.5 text-sm font-semibold", station === s ? "bg-ink text-paper" : "bg-card text-ink-2")}>{s}</button>
           ))}
@@ -105,7 +115,7 @@ export default function Kitchen() {
           {orders.map((o) => {
             const cooking = o.items.filter((i) => i.state === "cooking")
             const age = Math.max(0, ...cooking.map((i) => mins(i.fired_at)))
-            const tone = !cooking.length ? "border-line" : age >= LATE_AT ? "border-chili" : age >= AMBER_AT ? "border-saffron" : "border-basil"
+            const tone = !cooking.length ? "border-line" : age >= LATE_AT ? "border-chili" : age >= AMBER_AT ? "border-amber" : "border-basil"
             return (
               <article key={o.name} className={cn("flex flex-col overflow-hidden rounded-xl border-t-[6px] bg-card", tone)}>
                 <div className="flex items-start justify-between gap-2 px-3 pt-2.5">
@@ -115,13 +125,13 @@ export default function Kitchen() {
                   </div>
                   {cooking.length > 0 && (
                     <span className={cn("num rounded-md px-2 py-1 text-lg font-extrabold",
-                      age >= LATE_AT ? "bg-chili text-white" : age >= AMBER_AT ? "bg-saffron text-[#1d2733]" : "bg-basil text-white")}>
+                      age >= LATE_AT ? "bg-chili text-white" : age >= AMBER_AT ? "bg-amber text-ink" : "bg-basil text-white")}>
                       {Math.floor(age)}′
                     </span>
                   )}
                 </div>
                 {o.allergy_note && <p className="mx-3 mt-2 rounded-md bg-chili px-2 py-1 text-sm font-bold text-white">Allergy: {o.allergy_note}</p>}
-                {o.nc ? <p className="mx-3 mt-1 text-xs font-bold text-saffron">NC - complimentary</p> : null}
+                {o.nc ? <p className="mx-3 mt-1 text-xs font-bold text-amber">NC - complimentary</p> : null}
                 <ul className="mt-2 flex-1 divide-y divide-line">
                   {o.items.map((i) => (
                     <li key={i.name} className={cn("flex items-start gap-2 px-3 py-2",
@@ -133,7 +143,7 @@ export default function Kitchen() {
                           <span className={cn("mr-1.5 inline-block size-2.5 rounded-sm border-2 align-middle", i.is_veg ? "border-basil" : "border-chili")} />
                           {i.item_name}
                         </p>
-                        {i.instructions && <p className="text-sm font-semibold text-saffron">» {i.instructions}</p>}
+                        {i.instructions && <p className="text-sm font-semibold text-amber">» {i.instructions}</p>}
                         {i.allergy_hits.length > 0 && <p className="text-xs font-bold text-chili">Contains {i.allergy_hits.join(", ")}</p>}
                         <p className="text-[11px] text-mute">
                           {i.state === "held" ? `Held - ${i.course}` : i.state === "cancelled" ? `CANCELLED - ${i.void_reason ?? ""}` : i.prep_station}
@@ -147,7 +157,7 @@ export default function Kitchen() {
                 </ul>
                 <div className="flex gap-2 p-2">
                   {!o.accepted_at && cooking.length > 0
-                    ? <button onClick={() => act("accept_ticket", { order: o.name })} className="h-12 flex-1 rounded-lg bg-saffron text-base font-extrabold text-[#1d2733]">Start</button>
+                    ? <button onClick={() => act("accept_ticket", { order: o.name })} className="h-12 flex-1 rounded-lg bg-brand text-base font-extrabold text-on-brand">Start</button>
                     : cooking.length > 0 && <button onClick={() => act("mark_prepared", { order: o.name })} className="h-12 flex-1 rounded-lg bg-basil text-base font-extrabold text-white">All ready</button>}
                   {o.held_courses.length > 0 && <p className="self-center px-1 text-xs text-mute">Next: {o.held_courses.join(", ")}</p>}
                 </div>

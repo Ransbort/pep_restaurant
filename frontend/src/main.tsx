@@ -5,6 +5,9 @@ import "./index.css"
 import App from "./App"
 import { AuthProvider } from "./lib/auth"
 import { ToastProvider } from "./components/ui"
+import { initTheme } from "./lib/theme"
+
+initTheme()
 
 // Served at /restaurant in production; at / by the Vite dev server.
 const basename = location.pathname.startsWith("/restaurant") ? "/restaurant" : "/"

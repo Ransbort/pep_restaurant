@@ -4,8 +4,8 @@ import { cn } from "../lib/cn"
 
 type Variant = "ink" | "brand" | "ghost" | "danger" | "outline" | "go"
 const VARIANTS: Record<Variant, string> = {
-  ink: "bg-ink text-white hover:bg-ink-2",
-  brand: "bg-saffron text-ink hover:brightness-95",
+  ink: "bg-ink text-paper hover:bg-ink-2",
+  brand: "bg-brand text-on-brand hover:brightness-95",
   go: "bg-basil text-white hover:brightness-110",
   ghost: "bg-transparent text-ink-2 hover:bg-line/60",
   outline: "border border-line bg-card text-ink hover:border-ink-2",
@@ -100,8 +100,8 @@ export function Empty({ title, children, action }: { title: string; children?: R
 
 export function Tag({ tone = "mute", children, className }: { tone?: "mute" | "brand" | "go" | "warn" | "bad" | "info" | "plum"; children: ReactNode; className?: string }) {
   const t = {
-    mute: "bg-line/70 text-ink-2", brand: "bg-saffron-soft text-saffron-deep", go: "bg-basil-soft text-basil",
-    warn: "bg-saffron-soft text-saffron-deep", bad: "bg-chili-soft text-chili", info: "bg-sky-soft text-sky",
+    mute: "bg-line/70 text-ink-2", brand: "bg-brand-soft text-brand-deep", go: "bg-basil-soft text-basil",
+    warn: "bg-amber-soft text-amber-deep", bad: "bg-chili-soft text-chili", info: "bg-sky-soft text-sky",
     plum: "bg-plum-soft text-plum",
   }[tone]
   return <span className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold", t, className)}>{children}</span>
@@ -136,7 +136,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 z-[60] flex flex-col items-center gap-2 px-4 md:bottom-6">
         {list.map((t) => (
           <div key={t.id} className={cn("pointer-events-auto max-w-md rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg",
-            t.tone === "bad" ? "bg-chili text-white" : "bg-ink text-white")}>{t.text}</div>
+            t.tone === "bad" ? "bg-chili text-white" : "bg-ink text-paper")}>{t.text}</div>
         ))}
       </div>
     </ToastCtx.Provider>

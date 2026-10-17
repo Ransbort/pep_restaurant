@@ -12,6 +12,7 @@
   "email",
   "column_break_a",
   "logo",
+  "accent_color",
   "address",
   "tax_id",
   "disabled",
@@ -28,7 +29,9 @@
   "column_break_c",
   "reservation_before_min",
   "reservation_after_min",
-  "receipt_footer"
+  "receipt_footer",
+  "section_kitchen",
+  "prep_stations"
  ],
  "fields": [
   {
@@ -67,6 +70,13 @@
    "fieldname": "logo",
    "fieldtype": "Attach Image",
    "label": "Logo"
+  },
+  {
+   "default": "#f2a900",
+   "description": "Brand colour for the tills and the guest QR menu.",
+   "fieldname": "accent_color",
+   "fieldtype": "Color",
+   "label": "Accent colour"
   },
   {
    "fieldname": "address",
@@ -164,11 +174,23 @@
    "fieldname": "receipt_footer",
    "fieldtype": "Small Text",
    "label": "Receipt Footer"
+  },
+  {
+   "fieldname": "section_kitchen",
+   "fieldtype": "Section Break",
+   "label": "Kitchen"
+  },
+  {
+   "default": "Kitchen\nTandoor\nGrill\nFryer\nBar\nCold",
+   "description": "One per line. Each dish is cooked at one station; each kitchen screen can show just its own.",
+   "fieldname": "prep_stations",
+   "fieldtype": "Small Text",
+   "label": "Kitchen stations"
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-16 12:00:00.000000",
+ "modified": "2026-10-17 19:30:00.000000",
  "modified_by": "Administrator",
  "module": "Pep Restaurant",
  "name": "Pep Restaurant",

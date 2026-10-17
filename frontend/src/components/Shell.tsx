@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { NavLink } from "react-router-dom"
-import { BarChart3, BookOpen, ChefHat, CookingPot, LayoutGrid, LogOut, Package, QrCode, Settings, Wallet, WifiOff } from "lucide-react"
+import { BarChart3, BookOpen, ChefHat, CookingPot, LayoutGrid, LogOut, Package, Palette, QrCode, Settings, Wallet, WifiOff } from "lucide-react"
 import { R, useAuth } from "../lib/auth"
 import { useVenue } from "../lib/venue"
 import { cn } from "../lib/cn"
@@ -15,6 +15,7 @@ const NAV = [
   { to: "/stock", label: "Stock", icon: Package, roles: [R.cashier, R.kitchen] },
   { to: "/qr", label: "QR codes", icon: QrCode, roles: [R.manager] },
   { to: "/setup", label: "Setup", icon: Settings, roles: [R.manager] },
+  { to: "/settings", label: "Settings", icon: Palette, roles: [R.captain, R.cashier, R.kitchen, R.manager] },
 ]
 
 export function VenuePicker({ dark }: { dark?: boolean }) {
@@ -60,7 +61,7 @@ export default function Shell({ children, bare }: { children: ReactNode; bare?: 
   return (
     <div className="flex h-full">
       <Offline />
-      <aside className="no-print hidden w-[188px] shrink-0 flex-col bg-ink px-3 py-4 text-white md:flex">
+      <aside className="no-print hidden w-[188px] shrink-0 flex-col border-r border-white/5 bg-chrome px-3 py-4 text-white md:flex">
         <div className="mb-4 flex items-center gap-2 px-1">
           <img src={import.meta.env.BASE_URL + "pep-mark.svg"} alt="" className="size-7" />
           <span className="wide truncate text-sm font-bold">{restaurant?.restaurant_name ?? "Pep Restaurant"}</span>
@@ -70,7 +71,7 @@ export default function Shell({ children, bare }: { children: ReactNode; bare?: 
           {items.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} className={({ isActive }) => cn(
               "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium",
-              isActive ? "bg-saffron text-ink" : "text-white/75 hover:bg-white/10 hover:text-white")}>
+              isActive ? "bg-brand text-on-brand" : "text-white/75 hover:bg-white/10 hover:text-white")}>
               <Icon className="size-4" /> {label}
             </NavLink>
           ))}

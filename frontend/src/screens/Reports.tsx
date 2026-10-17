@@ -51,7 +51,7 @@ export default function Reports() {
                 <div className="flex h-40 items-end gap-1.5" role="img" aria-label="Sales by hour">
                   {d.by_hour.map((h) => (
                     <div key={h.hour} className="flex flex-1 flex-col items-center gap-1">
-                      <div className="w-full rounded-t-md bg-saffron" style={{ height: `${(h.total / maxHour) * 100}%` }} title={money(h.total)} />
+                      <div className="w-full rounded-t-md bg-brand" style={{ height: `${(h.total / maxHour) * 100}%` }} title={money(h.total)} />
                       <span className="text-[10px] text-mute">{h.hour}</span>
                     </div>
                   ))}
@@ -111,8 +111,8 @@ export default function Reports() {
 
 function Kpi({ label, value, lead }: { label: string; value: string; lead?: boolean }) {
   return (
-    <div className={"rounded-xl border p-4 " + (lead ? "border-ink bg-ink text-white" : "border-line bg-card")}>
-      <p className={"text-xs " + (lead ? "text-white/70" : "text-mute")}>{label}</p>
+    <div className={"rounded-xl border p-4 " + (lead ? "border-ink bg-ink text-paper" : "border-line bg-card")}>
+      <p className={"text-xs " + (lead ? "text-paper/70" : "text-mute")}>{label}</p>
       <p className="wide num mt-1 text-2xl font-extrabold">{value}</p>
     </div>
   )

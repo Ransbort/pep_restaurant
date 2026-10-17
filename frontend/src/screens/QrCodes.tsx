@@ -32,10 +32,10 @@ export default function QrCodes() {
           actions={<Button onClick={() => window.print()}><Printer className="size-4" />Print sheet</Button>} />
         <div className="mb-4 flex flex-wrap gap-1.5">
           {targets.map((x) => (
-            <button key={x.outlet} onClick={() => setOnly(x.outlet)} className={"rounded-lg px-3 py-1.5 text-sm font-semibold " + (only === x.outlet ? "bg-ink text-white" : "bg-card")}>{x.outlet_name}</button>
+            <button key={x.outlet} onClick={() => setOnly(x.outlet)} className={"rounded-lg px-3 py-1.5 text-sm font-semibold " + (only === x.outlet ? "bg-ink text-paper" : "bg-card")}>{x.outlet_name}</button>
           ))}
         </div>
-        {t && !t.qr_ordering && <p className="mb-3 rounded-lg bg-saffron-soft px-3 py-2 text-sm text-saffron-deep">Ordering is off for this outlet - guests can browse the menu but not order. Turn it on in Setup.</p>}
+        {t && !t.qr_ordering && <p className="mb-3 rounded-lg bg-amber-soft px-3 py-2 text-sm text-amber-deep">Ordering is off for this outlet - guests can browse the menu but not order. Turn it on in Setup.</p>}
       </div>
       {!t ? <Empty title="No outlets yet" /> : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-3">

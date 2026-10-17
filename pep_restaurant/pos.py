@@ -105,7 +105,7 @@ def _load_items(outlet: str, rows) -> list:
 			"rate": flt(mi.price),
 			"instructions": (r.get("instructions") or "")[:140] or None,
 			"course": mi.course or DEFAULT_COURSE,
-			"prep_station": mi.prep_station or "Kitchen",
+			"prep_station": mi.prep_station or None,
 			"kot_status": "New",
 		})
 	return out

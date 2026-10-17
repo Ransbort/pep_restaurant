@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Plus, Upload } from "lucide-react"
+import { Download, Plus, Upload } from "lucide-react"
+import { downloadText, slug, toCsv } from "../lib/csv"
 import { call, errText, P, uploadImage } from "../lib/api"
 import { money, useVenue } from "../lib/venue"
 import { R, useAuth } from "../lib/auth"
@@ -10,10 +11,11 @@ interface Dish {
   name: string; item_name: string; category?: string; price: number; course: string; prep_station: string
   is_veg: 0 | 1; is_alcohol: 0 | 1; available: 0 | 1; allergens?: string; description?: string; image?: string; sort_order: number
 }
-const BLANK: Partial<Dish> = { item_name: "", price: 0, course: "Main", prep_station: "Kitchen", is_veg: 0, is_alcohol: 0, available: 1, sort_order: 0 }
+const BLANK: Partial<Dish> = { item_name: "", price: 0, course: "Main", prep_station: "", is_veg: 0, is_alcohol: 0, available: 1, sort_order: 0 }
 
 export default function Dishes() {
-  const { outlet } = useVenue()
+  const { outlet, restaurant } = useVenue()
+  const stations = restaurant?.prep_stations ?? ["Kitchen"]
   const { has } = useAuth()
   const toast = useToast()
   const [rows, setRows] = useState<Dish[]>([])
@@ -78,14 +80,14 @@ export default function Dishes() {
           </section>
         ))}
       </div>
-      {edit && <DishModal dish={edit} outlet={outlet.name} categories={categories} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />}
-      {importing && <ImportModal outlet={outlet.name} onClose={() => setImporting(false)} onDone={() => { setImporting(false); load() }} />}
+      {edit && <DishModal dish={edit} outlet={outlet.name} categories={categories} stations={stations} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load() }} />}
+      {importing && <ImportModal outlet={outlet.name} outletName={outlet.outlet_name} stations={stations} dishes={rows} onClose={() => setImporting(false)} onDone={() => { setImporting(false); load() }} />}
     </>
   )
 }
 
-function DishModal({ dish, outlet, categories, onClose, onSaved }: { dish: Partial<Dish>; outlet: string; categories: string[]; onClose: () => void; onSaved: () => void }) {
-  const [d, setD] = useState<Partial<Dish>>(dish)
+function DishModal({ dish, outlet, categories, stations, onClose, onSaved }: { dish: Partial<Dish>; outlet: string; categories: string[]; stations: string[]; onClose: () => void; onSaved: () => void }) {
+  const [d, setD] = useState<Partial<Dish>>({ ...dish, prep_station: dish.prep_station || stations[0] })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState("")
   const set = (k: keyof Dish, v: unknown) => setD({ ...d, [k]: v })
@@ -109,7 +111,7 @@ function DishModal({ dish, outlet, categories, onClose, onSaved }: { dish: Parti
         </Field>
         <Field label="Sort order" hint="Lower numbers show first in their category."><Input inputMode="numeric" value={d.sort_order ?? 0} onChange={(e) => set("sort_order", e.target.value)} /></Field>
         <Field label="Course" hint="Lets a captain fire starters first and hold mains."><Select options={["Starter", "Main", "Dessert", "Drink"]} value={d.course} onChange={(e) => set("course", e.target.value)} /></Field>
-        <Field label="Cooked at" hint="Which kitchen screen and KOT the dish goes to."><Select options={["Kitchen", "Tandoor", "Grill", "Fryer", "Bar", "Cold"]} value={d.prep_station} onChange={(e) => set("prep_station", e.target.value)} /></Field>
+        <Field label="Station" hint="Where it's cooked. Each station's kitchen screen shows only its own dishes; set stations up in Setup."><Select options={stations.includes(d.prep_station ?? "") || !d.prep_station ? stations : [...stations, d.prep_station!]} value={d.prep_station} onChange={(e) => set("prep_station", e.target.value)} /></Field>
         <Field label="Allergens" hint="Comma separated. The kitchen screen flags them against a guest's allergy note."><Input value={d.allergens ?? ""} onChange={(e) => set("allergens", e.target.value)} placeholder="Nuts, Dairy, Gluten" /></Field>
         <Field label="Photo">
           <div className="flex items-center gap-2">
@@ -132,22 +134,94 @@ function DishModal({ dish, outlet, categories, onClose, onSaved }: { dish: Parti
   )
 }
 
-function ImportModal({ outlet, onClose, onDone }: { outlet: string; onClose: () => void; onDone: () => void }) {
-  const [text, setText] = useState("item_name,price,category,course,prep_station,is_veg,allergens\nMasala Dosa,160,Breakfast,Main,Kitchen,yes,\n")
+const COLUMNS: [string, string, string][] = [
+  ["item_name", "Required", "The dish's name. A dish with the same name at this outlet is updated, not duplicated."],
+  ["price", "Required", "A number, no currency sign: 160 or 160.50."],
+  ["category", "Optional", "How the menu is grouped: Starters, Mains, Drinks…"],
+  ["course", "Optional", "Starter, Main, Dessert or Drink. Blank means Main."],
+  ["prep_station", "Optional", "Where it's cooked - one of your kitchen stations. Blank means the first one."],
+  ["is_veg", "Optional", "yes / no"],
+  ["is_alcohol", "Optional", "yes / no"],
+  ["available", "Optional", "yes / no - no adds it already off the menu."],
+  ["allergens", "Optional", "Comma separated inside quotes: \"Nuts, Dairy\""],
+  ["description", "Optional", "Shown on the guest QR menu."],
+  ["sort_order", "Optional", "Lower numbers show first in their category."],
+]
+const HEADER = COLUMNS.map(([c]) => c)
+const yn = (v: unknown) => (Number(v) ? "yes" : "no")
+
+function ImportModal({ outlet, outletName, stations, dishes, onClose, onDone }: {
+  outlet: string; outletName: string; stations: string[]; dishes: Dish[]; onClose: () => void; onDone: () => void
+}) {
+  const [text, setText] = useState("")
+  const [fileName, setFileName] = useState("")
   const [update, setUpdate] = useState(true)
+  const [guide, setGuide] = useState(false)
   const [res, setRes] = useState<{ created: number; updated: number; errors: { line: number; item: string; error: string }[] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState("")
+  const st = (i: number) => stations[Math.min(i, stations.length - 1)] ?? "Kitchen"
+
+  const template = () => downloadText("pep-menu-template.csv", toCsv(HEADER, [
+    ["Masala Dosa", 160, "Breakfast", "Main", st(0), "yes", "no", "yes", "Gluten", "Crisp rice crepe, potato masala, chutneys", 1],
+    ["Chicken Wings", 320, "Starters", "Starter", stations.find((s) => /fry/i.test(s)) ?? st(1), "no", "no", "yes", "", "", 2],
+    ["Chocolate Brownie", 180, "Desserts", "Dessert", stations.find((s) => /cold|pastry/i.test(s)) ?? st(0), "yes", "no", "yes", "Nuts, Dairy, Gluten", "Warm, with ice cream", 3],
+    ["Fresh Lime Soda", 110, "Drinks", "Drink", stations.find((s) => /bar/i.test(s)) ?? st(0), "yes", "no", "yes", "", "", 4],
+  ]))
+  const exportMenu = () => downloadText(`${slug(outletName)}-menu.csv`, toCsv(HEADER, dishes.map((d) => [
+    d.item_name, d.price, d.category, d.course, d.prep_station, yn(d.is_veg), yn(d.is_alcohol), yn(d.available),
+    d.allergens, d.description, d.sort_order,
+  ])))
+  const readFile = async (f?: File) => {
+    if (!f) return
+    setText(await f.text()); setFileName(f.name); setRes(null); setErr("")
+  }
   const go = async () => {
     setBusy(true); setErr("")
     try { setRes(await call(`${P}.menu.import_csv`, { outlet, csv_text: text, update_existing: update ? 1 : 0 })) } catch (e) { setErr(errText(e)) } finally { setBusy(false) }
   }
+  const lines = text.trim() ? text.trim().split(/\r?\n/).length - 1 : 0
   return (
-    <Modal wide title="Import a menu" onClose={onClose}
-      footer={res ? <Button onClick={onDone}>Done</Button> : <><Button variant="ghost" onClick={onClose}>Cancel</Button><Button busy={busy} onClick={go}>Import</Button></>}>
-      <p className="text-sm text-mute">Paste CSV with a header row. <b>item_name</b> and <b>price</b> are required; category, course, prep_station, is_veg, is_alcohol, allergens and description are optional.</p>
-      <Textarea className="min-h-56 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+    <Modal wide title={`Import a menu into ${outletName}`} onClose={onClose}
+      footer={res ? <Button onClick={onDone}>Done</Button> : <><Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button busy={busy} disabled={!lines} onClick={go}>Import {lines ? `${lines} dish${lines === 1 ? "" : "es"}` : ""}</Button></>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-line p-3">
+          <p className="text-sm font-semibold">1. Get a spreadsheet</p>
+          <p className="mt-0.5 text-xs text-mute">Open it in Excel or Google Sheets, fill one dish per row, save as CSV.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={template}><Download className="size-3.5" />Download template</Button>
+            {dishes.length > 0 && <Button size="sm" variant="ghost" onClick={exportMenu}><Download className="size-3.5" />Current menu ({dishes.length})</Button>}
+          </div>
+        </div>
+        <label className="cursor-pointer rounded-xl border-2 border-dashed border-line p-3 hover:border-ink-2"
+          onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); readFile(e.dataTransfer.files[0]) }}>
+          <p className="text-sm font-semibold">2. Upload it</p>
+          <p className="mt-0.5 text-xs text-mute">{fileName ? `Loaded ${fileName}` : "Choose or drop the CSV file here - or paste below."}</p>
+          <span className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink px-2.5 text-xs font-semibold text-paper"><Upload className="size-3.5" />Choose file</span>
+          <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => readFile(e.target.files?.[0])} />
+        </label>
+      </div>
+      <Textarea className="min-h-40 font-mono text-xs" value={text} placeholder={HEADER.join(",")}
+        onChange={(e) => { setText(e.target.value); setRes(null) }} aria-label="CSV contents" />
       <Check label="Update dishes that already exist (matched by name)" checked={update} onChange={setUpdate} />
+      <div className="rounded-xl bg-paper">
+        <button onClick={() => setGuide(!guide)} aria-expanded={guide} className="w-full px-3 py-2 text-left text-sm font-semibold">
+          {guide ? "Hide" : "Show"} what each column means
+        </button>
+        {guide && (
+          <div className="px-3 pb-3">
+            <table className="w-full text-xs">
+              <tbody className="divide-y divide-line">
+                {COLUMNS.map(([c, need, what]) => (
+                  <tr key={c}><td className="py-1.5 pr-3 font-mono font-semibold">{c}</td><td className="pr-3 text-mute">{need}</td><td className="py-1.5">{what}</td></tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-mute">Your stations: {stations.join(", ")}. Change them in Setup.</p>
+          </div>
+        )}
+      </div>
       {res && (
         <div className="rounded-lg bg-paper p-3 text-sm">
           <p className="font-semibold">{res.created} added, {res.updated} updated{res.errors.length ? `, ${res.errors.length} skipped` : ""}.</p>

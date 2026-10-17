@@ -49,7 +49,7 @@ export default function Stock() {
           <button onClick={() => setTab("waste")} className={cn("rounded-md px-3 py-1.5 text-sm font-semibold", tab === "waste" && "bg-card shadow-sm")}>Wastage</button>
         </div>
         {tab === "hand" && ["", "NEGATIVE", "OUT", "LOW", "OK"].map((s) => (
-          <button key={s} onClick={() => setFilter(s)} className={cn("rounded-full px-3 py-1 text-xs font-semibold", filter === s ? "bg-ink text-white" : "bg-card text-ink-2")}>
+          <button key={s} onClick={() => setFilter(s)} className={cn("rounded-full px-3 py-1 text-xs font-semibold", filter === s ? "bg-ink text-paper" : "bg-card text-ink-2")}>
             {s ? LABEL[s as keyof typeof LABEL] : "All"} {s ? `(${rows.filter((r) => r.status === s).length})` : ""}
           </button>
         ))}

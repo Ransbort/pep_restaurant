@@ -188,3 +188,37 @@ class TestPepPOS(TestCase):
 		frappe.set_user("pep-nobody@example.com")
 		with self.assertRaises(frappe.PermissionError):
 			pos.table_map(outlet=self.outlet)
+
+	def test_accent_colour(self):
+		from pep_restaurant.api import set_accent
+
+		self.assertEqual(set_accent(restaurant=REST, accent_color="0F8")["accent_color"], "#00ff88")
+		with self.assertRaises(frappe.ValidationError):
+			set_accent(restaurant=REST, accent_color="teal")
+		frappe.set_user(self.cashier_user)
+		with self.assertRaises(frappe.PermissionError):
+			set_accent(restaurant=REST, accent_color="#000000")
+
+	def test_kitchen_stations(self):
+		from pep_restaurant import menu
+
+		rest = frappe.get_doc("Pep Restaurant", REST)
+		rest.prep_stations = "Kitchen\nGrill\nPizza Oven\ngrill\n"
+		rest.save()
+		self.assertEqual(rest.prep_stations, "Kitchen\nGrill\nPizza Oven")  # deduped, trimmed
+		dish = menu.save_menu_item(outlet=self.outlet, item_name="Margherita", price=400, prep_station="pizza oven")["name"]
+		self.assertEqual(frappe.db.get_value("Pep Menu Item", dish, "prep_station"), "Pizza Oven")
+		with self.assertRaises(frappe.ValidationError):
+			menu.save_menu_item(outlet=self.outlet, item_name="Naan", price=60, prep_station="Tandoor")
+		rest.reload()
+		rest.prep_stations = "Kitchen\nGrill"  # Pizza Oven still has a dish
+		with self.assertRaises(frappe.ValidationError):
+			rest.save()
+
+	def test_csv_import_excel_style(self):
+		from pep_restaurant import menu
+
+		out = menu.import_csv(outlet=self.outlet,
+		                      csv_text="﻿item_name;price;category;prep_station;is_veg\nKulfi;90;Desserts;Kitchen;yes\n")
+		self.assertEqual((out["created"] + out["updated"], out["errors"]), (1, []))
+		self.assertEqual(frappe.db.get_value("Pep Menu Item", {"item_name": "Kulfi"}, "is_veg"), 1)

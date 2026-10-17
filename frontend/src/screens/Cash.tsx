@@ -104,8 +104,8 @@ export default function Cash() {
 
 function Stat({ label, value, big, tone }: { label: string; value: number; big?: boolean; tone?: "go" | "bad" }) {
   return (
-    <div className={cn("rounded-xl border border-line bg-card p-4", big && "bg-ink text-white")}>
-      <p className={cn("text-xs", big ? "text-white/70" : "text-mute")}>{label}</p>
+    <div className={cn("rounded-xl border border-line bg-card p-4", big && "bg-ink text-paper")}>
+      <p className={cn("text-xs", big ? "text-paper/70" : "text-mute")}>{label}</p>
       <p className={cn("wide num mt-1 text-2xl font-extrabold", tone === "go" && "text-basil", tone === "bad" && "text-chili")}>{money(value)}</p>
     </div>
   )

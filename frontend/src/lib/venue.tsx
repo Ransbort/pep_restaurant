@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { call, P } from "./api"
+import { rememberAccent } from "./theme"
 
 export interface Outlet {
   name: string; restaurant: string; outlet_name: string; outlet_type: string
@@ -7,7 +8,7 @@ export interface Outlet {
 }
 export interface Restaurant {
   name: string; restaurant_name: string; currency: string; currency_symbol: string; tax_label: string
-  prices_include_tax: 0 | 1; require_cashier_pin: 0 | 1; require_open_session: 0 | 1; logo?: string
+  prices_include_tax: 0 | 1; require_cashier_pin: 0 | 1; require_open_session: 0 | 1; logo?: string; accent_color?: string; prep_stations: string[]
   outlets: Outlet[]
 }
 interface VenueValue {
@@ -53,7 +54,11 @@ export function VenueProvider({ children }: { children: ReactNode }) {
   const outlet = useMemo(
     () => restaurant?.outlets.find((o) => o.name === oName) ?? restaurant?.outlets[0] ?? null, [restaurant, oName])
 
-  useEffect(() => { if (restaurant) setMoney(restaurant.currency, restaurant.currency_symbol) }, [restaurant])
+  useEffect(() => {
+    if (!restaurant) return
+    setMoney(restaurant.currency, restaurant.currency_symbol)
+    rememberAccent(restaurant.accent_color)
+  }, [restaurant])
 
   const value: VenueValue = {
     loaded, restaurants, canSetup, restaurant, outlet, reload,

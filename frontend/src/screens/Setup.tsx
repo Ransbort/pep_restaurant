@@ -16,7 +16,7 @@ export default function Setup() {
   if (!who?.is_admin) return <Empty title="Only managers can change setup" />
 
   const openRestaurant = async (name?: string) => {
-    if (!name) return setEditR({ restaurant_name: "", currency: "INR", tax_label: "GST", tax_split: "CGST:50\nSGST:50", require_open_session: 1, prices_include_tax: 0, require_cashier_pin: 0, pin_max_attempts: 5, pin_lock_minutes: 15, reservation_before_min: 60, reservation_after_min: 240, receipt_footer: "Thank you! Visit again." })
+    if (!name) return setEditR({ restaurant_name: "", currency: "INR", tax_label: "GST", tax_split: "CGST:50\nSGST:50", require_open_session: 1, prices_include_tax: 0, require_cashier_pin: 0, pin_max_attempts: 5, pin_lock_minutes: 15, reservation_before_min: 60, reservation_after_min: 240, receipt_footer: "Thank you! Visit again.", prep_stations: "Kitchen\nGrill\nFryer\nBar\nCold" })
     try { setEditR(await call<Doc>(`${P}.api.get_restaurant`, { restaurant: name })) } catch (e) { toast(errText(e), "bad") }
   }
   const openOutlet = async (name?: string) => {
@@ -105,6 +105,10 @@ function RestaurantModal({ doc, onClose, onSaved }: { doc: Doc; onClose: () => v
         <Field label="…until (minutes after)"><Input inputMode="numeric" {...text("reservation_after_min")} /></Field>
       </div>
       <Field label="Bill footer"><Input {...text("receipt_footer")} /></Field>
+      <Field label="Kitchen stations"
+        hint="One per line, in the order cooks see them. Each dish is cooked at one station, and a kitchen screen can show just one station - put a tablet at each. A station with dishes on it can't be removed until they move.">
+        <Textarea className="min-h-32 font-mono text-sm" {...text("prep_stations")} placeholder={"Kitchen\nGrill\nBar"} />
+      </Field>
       {err && <p className="text-sm text-chili">{err}</p>}
     </Modal>
   )
