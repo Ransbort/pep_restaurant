@@ -226,6 +226,12 @@ class TestPepPOS(TestCase):
 	def test_ingredient_import(self):
 		from pep_restaurant.inventory import import_ingredients
 
+		old = frappe.get_all("Restaurant Ingredient", {"restaurant": REST, "ingredient_name": ("like", "Imported %")},
+		                     pluck="name")
+		if old:  # rerun-safe: another test may have committed an earlier run's rows
+			for t in ("Restaurant Stock Ledger Entry", "Restaurant Ingredient Stock"):
+				frappe.db.delete(t, {"ingredient": ("in", old)})
+			frappe.db.delete("Restaurant Ingredient", {"name": ("in", old)})
 		csv_text = ("﻿ingredient_name;uom;category;cost_per_unit;opening_stock;par_level\n"
 		            "Imported Rice;kgs;Dry;22;25;8\n"
 		            "Imported Beer;Bottles;Bar;₵14;48;24\n"
@@ -303,3 +309,73 @@ class TestPepPOS(TestCase):
 		with mock.patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 80))]):
 			with self.assertRaises(frappe.ValidationError):
 				remote_image.fetch("http://localhost/x.png")
+
+	def test_cashier_pin(self):
+		from unittest.mock import patch
+
+		from pep_restaurant import authz
+
+		frappe.db.set_value("Restaurant", REST, {"require_cashier_pin": 1, "pin_max_attempts": 3, "pin_lock_minutes": 15})
+		frappe.db.delete("Restaurant Cashier PIN", {"user": self.cashier_user})
+		# a wrong PIN commits so the count survives the rollback; keep the test's data out of the db
+		commit = patch.object(frappe.db, "commit")
+		commit.start()
+		try:
+			frappe.set_user(self.cashier_user)
+			frappe.cache.delete_value(authz._unlock_key(self.cashier_user))
+			with self.assertRaisesRegex(frappe.ValidationError, "PIN_NOT_SET"):
+				authz.require_cashier_pin(REST)
+			authz.set_my_pin("4821")
+			self.assertTrue(frappe.db.exists("Restaurant Cashier PIN", self.cashier_user))
+			with self.assertRaisesRegex(frappe.ValidationError, "PIN_REQUIRED"):
+				authz.require_cashier_pin(REST)
+			with self.assertRaisesRegex(frappe.ValidationError, "Wrong cashier PIN"):
+				authz.unlock(REST, "1111")
+			self.assertEqual(authz.unlock(REST, "4821")["unlocked_minutes"], 15)
+			authz.require_cashier_pin(REST)  # inside the unlock window: no PIN needed
+			# changing the PIN needs the current one
+			with self.assertRaisesRegex(frappe.ValidationError, "current PIN is wrong"):
+				authz.set_my_pin("9999", current_pin="0000")
+			authz.set_my_pin("9999", current_pin="4821")
+			# three wrong tries lock the PIN, even the right one is refused then
+			frappe.cache.delete_value(authz._unlock_key(self.cashier_user))
+			for _ in range(2):
+				with self.assertRaisesRegex(frappe.ValidationError, "Wrong cashier PIN"):
+					authz.require_cashier_pin(REST, "1234")
+			with self.assertRaisesRegex(frappe.ValidationError, "PIN_LOCKED"):
+				authz.require_cashier_pin(REST, "1234")
+			with self.assertRaisesRegex(frappe.ValidationError, "PIN_LOCKED"):
+				authz.require_cashier_pin(REST, "9999")
+			# a manager reset clears the lock and forces a new PIN
+			frappe.set_user("Administrator")
+			authz.reset_pin(self.cashier_user)
+			frappe.set_user(self.cashier_user)
+			with self.assertRaisesRegex(frappe.ValidationError, "PIN_MUST_RESET"):
+				authz.require_cashier_pin(REST, "9999")
+			authz.set_my_pin("5555")
+			self.assertTrue(authz.unlock(REST, "5555")["ok"])
+		finally:
+			commit.stop()
+			frappe.set_user("Administrator")
+			frappe.cache.delete_value(authz._unlock_key(self.cashier_user))
+			frappe.db.set_value("Restaurant", REST, "require_cashier_pin", 0)
+
+	def test_rename_restaurant(self):
+		from pep_restaurant import api
+
+		for n in ("_Test Rename A", "_Test Rename B"):
+			frappe.db.delete("Restaurant Outlet", {"restaurant": n})
+			frappe.db.delete("Restaurant", {"name": n})
+		frappe.get_doc({"doctype": "Restaurant", "restaurant_name": "_Test Rename A", "currency": "INR"}).insert()
+		out = frappe.get_doc({"doctype": "Restaurant Outlet", "restaurant": "_Test Rename A",
+		                      "outlet_name": "Rename Hall"}).insert().name
+		r = api.save_restaurant(restaurant_name="_Test Rename B", name="_Test Rename A", currency="GHS")
+		self.assertEqual(r["name"], "_Test Rename B")
+		self.assertFalse(frappe.db.exists("Restaurant", "_Test Rename A"))
+		doc = frappe.get_doc("Restaurant", "_Test Rename B")
+		self.assertEqual((doc.restaurant_name, doc.currency), ("_Test Rename B", "GHS"))
+		self.assertEqual(frappe.db.get_value("Restaurant Outlet", out, "restaurant"), "_Test Rename B")
+		with self.assertRaisesRegex(frappe.ValidationError, "already a restaurant"):
+			api.save_restaurant(restaurant_name=REST, name="_Test Rename B")
+		with self.assertRaisesRegex(frappe.ValidationError, "isn't in the currency list"):
+			api.save_restaurant(restaurant_name="_Test Rename B", name="_Test Rename B", currency="XYZ")

@@ -30,8 +30,6 @@ RENAMES = (
 
 
 def execute():
-	if frappe.db.exists("Module Def", "Pep Restaurant") and not frappe.db.exists("Module Def", "Restaurant"):
-		frappe.rename_doc("Module Def", "Pep Restaurant", "Restaurant", force=True, show_alert=False)
 	for old, new in RENAMES:
 		if frappe.db.exists("DocType", old) and not frappe.db.exists("DocType", new):
 			frappe.rename_doc("DocType", old, new, force=True, show_alert=False, rebuild_search=False)
@@ -41,4 +39,28 @@ def execute():
 		frappe.rename_doc("Item Group", "Pep Restaurant", "Restaurant", force=True, show_alert=False)
 		if frappe.db.exists("DocType", "Restaurant Accounting Settings"):
 			frappe.db.sql("update `tabRestaurant Accounting Settings` set item_group='Restaurant' where item_group='Pep Restaurant'")
+	_move_module("Pep Restaurant", "Restaurant")
 	frappe.clear_cache()
+	# the module map migrate loaded at start still says pep_restaurant.pep_restaurant;
+	# rebuild it from modules.txt or the model sync that follows can't import it
+	frappe.setup_module_map()
+
+
+def _move_module(old, new):
+	"""Frappe won't rename an app's Module Def, so repoint everything that
+	names the old module (DocTypes, Reports, Workspaces, Pages…) by hand and
+	drop it. Migrate may already have created the new one from modules.txt."""
+	if not frappe.db.exists("Module Def", old):
+		return
+	if not frappe.db.exists("Module Def", new):
+		frappe.get_doc({"doctype": "Module Def", "module_name": new, "app_name": "pep_restaurant"}).db_insert()
+	links = frappe.get_all("DocField", filters={"fieldtype": "Link", "options": "Module Def"},
+	                       fields=["parent", "fieldname"])
+	links += frappe.get_all("Custom Field", filters={"fieldtype": "Link", "options": "Module Def"},
+	                        fields=["dt as parent", "fieldname"])
+	for row in links:
+		meta = frappe.get_meta(row.parent)
+		if meta.issingle or meta.is_virtual or not frappe.db.table_exists(row.parent):
+			continue
+		frappe.db.sql(f"update `tab{row.parent}` set `{row.fieldname}`=%s where `{row.fieldname}`=%s", (new, old))
+	frappe.db.delete("Module Def", {"name": old})

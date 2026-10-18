@@ -87,7 +87,7 @@ function RestaurantModal({ doc, onClose, onSaved }: { doc: Doc; onClose: () => v
     <Modal wide title={v.name ? `Edit ${doc.restaurant_name}` : "Add a restaurant"} onClose={onClose} footer={<Button busy={busy} onClick={save}>Save restaurant</Button>}>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Name" hint={v.name && v.restaurant_name !== doc.restaurant_name ? "Renaming keeps every outlet, order and setting with it." : undefined}><Input {...text("restaurant_name")} /></Field>
-        <Field label="Currency" hint="Search by code or name: GHS, Cedi, USD…"><LinkPicker kind="currency" value={(v.currency as string) || ""} onChange={(c) => setV({ ...v, currency: c })} placeholder="Pick a currency" /></Field>
+        <Field label="Currency" hint="Search by code: GHS, USD, NGN…"><LinkPicker kind="currency" value={(v.currency as string) || ""} onChange={(c) => setV({ ...v, currency: c })} placeholder="Pick a currency" /></Field>
         <Field label="Phone"><Input {...text("phone")} /></Field>
         <Field label="Tax ID" hint="Printed on bills (GSTIN, VAT no.)."><Input {...text("tax_id")} /></Field>
       </div>

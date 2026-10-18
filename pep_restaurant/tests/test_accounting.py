@@ -217,3 +217,13 @@ class TestPepAccounting(TestCase):
 		self.assertEqual(accounting.search_link(kind="income_account"), [])  # accounts need a company
 		with self.assertRaises(frappe.ValidationError):
 			accounting.search_link(kind="user")
+
+
+class TestCurrencyPicker(TestCase):
+	def test_currency_search(self):
+		from pep_restaurant.accounting import search_link
+
+		frappe.set_user("Administrator")
+		hits = [h["value"] for h in search_link("currency", "GHS")]
+		self.assertEqual(hits[0], "GHS")
+		self.assertTrue(search_link("currency", ""))  # browse with no text

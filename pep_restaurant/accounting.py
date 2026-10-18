@@ -489,7 +489,7 @@ def options(company: str | None = None):
 # picker from offering, say, a bank account as the income account.
 _LINKS = {
 	# Currency is a Frappe core list, so this one works without ERPNext
-	"currency": ("Currency", {}, ["currency_name"], "currency_name"),
+	"currency": ("Currency", {}, ["symbol"], "symbol"),
 	"customer": ("Customer", {"disabled": 0}, ["customer_name"], "customer_name"),
 	"item": ("Item", {"disabled": 0, "is_stock_item": 0, "is_sales_item": 1}, ["item_name"], "item_name"),
 	"cost_center": ("Cost Center", {"is_group": 0}, ["cost_center_name"], None),
