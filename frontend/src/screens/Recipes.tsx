@@ -103,12 +103,12 @@ function RecipeModal({ menuItem, restaurant, canEdit, onClose, onSaved }: { menu
       <div className="space-y-2">
         {rows.map((r, i) => (
           <div key={i} className="flex items-center gap-2">
-            <Select className="flex-1" disabled={!canEdit} value={r.ingredient}
+            <Select className="min-w-0 flex-1" disabled={!canEdit} value={r.ingredient}
               options={[{ value: "", label: "Pick an ingredient" }, ...ings.filter((g) => g.is_active || g.name === r.ingredient).map((g) => ({ value: g.name, label: `${g.ingredient_name} (${g.uom})` }))]}
               onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, ingredient: e.target.value } : x)))} />
-            <Input className="w-24" inputMode="decimal" disabled={!canEdit} value={r.qty} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} />
-            <span className="w-10 text-xs text-mute">{byName[r.ingredient]?.uom}</span>
-            <span className="num w-20 text-right text-sm">{money((Number(r.qty) || 0) * (byName[r.ingredient]?.cost_per_unit ?? 0))}</span>
+            <Input className="w-24 shrink-0" inputMode="decimal" disabled={!canEdit} value={r.qty} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} />
+            <span className="w-10 shrink-0 text-xs text-mute">{byName[r.ingredient]?.uom}</span>
+            <span className="num w-20 shrink-0 text-right text-sm">{money((Number(r.qty) || 0) * (byName[r.ingredient]?.cost_per_unit ?? 0))}</span>
             {canEdit && <button aria-label="Remove line" onClick={() => setRows(rows.filter((_, j) => j !== i))} className="p-1 text-mute hover:text-chili"><Trash2 className="size-4" /></button>}
           </div>
         ))}

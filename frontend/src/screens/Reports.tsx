@@ -3,6 +3,8 @@ import { call, errText, P } from "../lib/api"
 import { money, useVenue } from "../lib/venue"
 import { Input, PageHead, Tag, useToast } from "../components/ui"
 
+const BAR_MAX = 140 // tallest bar, px
+
 interface Dash {
   gross_sales: number; net_sales: number; tax: number; service_charge: number; discounts: number; bills: number; covers: number; avg_bill: number
   by_order_type: { label: string; bills: number; total: number }[]; by_tender: { label: string; total: number }[]
@@ -48,10 +50,11 @@ export default function Reports() {
           <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
             <Card title="Sales by hour">
               {d.by_hour.length ? (
-                <div className="flex h-40 items-end gap-1.5" role="img" aria-label="Sales by hour">
+                <div className="flex items-end gap-1.5" style={{ height: BAR_MAX + 20 }} role="img" aria-label="Sales by hour">
                   {d.by_hour.map((h) => (
                     <div key={h.hour} className="flex flex-1 flex-col items-center gap-1">
-                      <div className="w-full rounded-t-md bg-brand" style={{ height: `${(h.total / maxHour) * 100}%` }} title={money(h.total)} />
+                      {/* px, not %: a % height inside this auto-height column resolved to 0 */}
+                      <div className="w-full rounded-t-md bg-brand" style={{ height: `${Math.max(h.total > 0 ? 2 : 0, Math.round((h.total / maxHour) * BAR_MAX))}px` }} title={`${h.hour}:00 · ${money(h.total)}`} />
                       <span className="text-[10px] text-mute">{h.hour}</span>
                     </div>
                   ))}

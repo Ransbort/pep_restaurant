@@ -8,7 +8,7 @@ const store = {
 }
 
 /** Rows per page, remembered on this device per list. */
-export function savedPageSize(key: string, fallback = 15) {
+export function savedPageSize(key: string, fallback = 10) {
   const n = Number(store.get(`pep.pagesize.${key}`))
   return [10, 15, 30, 60].includes(n) ? n : fallback
 }

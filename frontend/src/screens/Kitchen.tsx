@@ -16,7 +16,7 @@ interface KItem {
 }
 interface KOrder {
   name: string; label: string; outlet_name: string; kot_no?: number; order_type: string; guests?: number
-  allergy_note?: string; notes?: string; accepted_at?: string; held_courses: string[]; items: KItem[]; nc: 0 | 1
+  allergy_note?: string; notes?: string; accepted_at?: string; held_courses: string[]; items: KItem[]; nc: 0 | 1; status?: string; paid?: 0 | 1
 }
 
 const AMBER_AT = 8
@@ -132,6 +132,7 @@ export default function Kitchen() {
                 </div>
                 {o.allergy_note && <p className="mx-3 mt-2 rounded-md bg-chili px-2 py-1 text-sm font-bold text-white">Allergy: {o.allergy_note}</p>}
                 {o.nc ? <p className="mx-3 mt-1 text-xs font-bold text-amber">NC - complimentary</p> : null}
+                {o.status === "Closed" && o.paid ? <p className="mx-3 mt-1 text-xs font-bold text-basil">Paid - waiting for the food</p> : null}
                 <ul className="mt-2 flex-1 divide-y divide-line">
                   {o.items.map((i) => (
                     <li key={i.name} className={cn("flex items-start gap-2 px-3 py-2",

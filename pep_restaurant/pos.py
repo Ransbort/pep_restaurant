@@ -128,6 +128,16 @@ def _open_doc(order: str):
 	return doc
 
 
+def _kitchen_doc(order: str):
+	"""Kitchen actions follow the food, not the bill: a takeaway is often paid
+	(Closed) before it is cooked, and the chef still has to mark it ready.
+	Only a cancelled order is off limits - its lines are acknowledged instead."""
+	doc = frappe.get_doc("Restaurant Order", order)
+	if doc.status not in (*OPEN, "Closed"):
+		frappe.throw(_("This order was cancelled."))
+	return doc
+
+
 # ---------------------------------------------------------------- orders
 
 
@@ -650,15 +660,16 @@ def kitchen_queue(restaurant: str, outlet: str | None = None, station: str | Non
 	A ticket stays on the board while it has cooking, held or cancelled lines.
 	`fired_at` per line is what the display ages against."""
 	assert_restaurant_access(restaurant)
-	# cancelled orders stay on while a fired line's cancellation is unseen
-	filters = {"restaurant": restaurant, "status": ("in", (*OPEN, "Cancelled")), "kot_fired": 1,
+	# cancelled orders stay on while a fired line's cancellation is unseen, and
+	# paid (Closed) ones while food is still cooking - a takeaway pays first
+	filters = {"restaurant": restaurant, "status": ("in", (*OPEN, "Closed", "Cancelled")), "kot_fired": 1,
 	           "modified": (">", add_to_date(now_datetime(), hours=-12))}
 	if outlet:
 		filters["outlet"] = outlet
 	orders = frappe.get_all(
 		"Restaurant Order", filters=filters,
 		fields=["name", "outlet", "table_no", "creation", "notes", "kot_no", "order_type", "guests",
-		        "captain", "allergy_note", "accepted_at", "customer_name", "nc"],
+		        "captain", "allergy_note", "accepted_at", "customer_name", "nc", "status", "paid"],
 		order_by="creation asc",
 	)
 	if not orders:
@@ -699,7 +710,9 @@ def kitchen_queue(restaurant: str, outlet: str | None = None, station: str | Non
 	out = []
 	for o in orders:
 		items = by_order.get(o.name) or []
-		if not any(i["state"] in ("cooking", "held", "cancelled") for i in items):
+		# a closed bill can't fire its held lines any more, so they don't keep it up
+		live = ("cooking", "cancelled") if o.status == "Closed" else ("cooking", "held", "cancelled")
+		if not any(i["state"] in live for i in items):
 			continue
 		o["outlet_name"] = outlet_names.get(o.outlet)
 		o["label"] = _label(o)
@@ -727,7 +740,7 @@ def accept_ticket(order: str):
 def mark_prepared(order: str, item_row: str | None = None):
 	"""Kitchen marks one line (or every cooking line) prepared. Voided lines
 	are never swept up by "all ready" - that food is cancelled, not cooked."""
-	doc = _open_doc(order)
+	doc = _kitchen_doc(order)
 	stamp = now()
 	for it in doc.items:
 		if it.voided:
@@ -749,7 +762,7 @@ def mark_prepared(order: str, item_row: str | None = None):
 def recall_prepared(order: str, item_row: str | None = None):
 	"""Undo a mark-prepared: the line goes back to Fired (never New - that
 	would re-fire and re-deduct stock). A mis-tap must not be one-way."""
-	doc = _open_doc(order)
+	doc = _kitchen_doc(order)
 	for it in doc.items:
 		if it.voided:
 			continue

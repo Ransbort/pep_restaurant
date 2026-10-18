@@ -32,15 +32,21 @@ export function Button({ variant = "ink", size = "md", className, busy, children
 export const inputCls =
   "w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink placeholder:text-mute focus:border-ink-2 focus:outline-none"
 
+/** inputCls plus the caller's classes. A width the caller passes (w-24, w-auto)
+ *  replaces the default w-full - with both, w-full won and a "w-24" quantity box
+ *  stretched across the row, squeezing whatever sat beside it. */
+const withField = (extra: string, own?: string) =>
+  cn(/(^|\s)!?w-/.test(own ?? "") ? inputCls.replace("w-full ", "") : inputCls, extra, own)
+
 export function Input(p: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...p} className={cn(inputCls, p.className)} />
+  return <input {...p} className={withField("", p.className)} />
 }
 export function Textarea(p: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...p} className={cn(inputCls, "min-h-20", p.className)} />
+  return <textarea {...p} className={withField("min-h-20", p.className)} />
 }
 export function Select({ options, ...p }: SelectHTMLAttributes<HTMLSelectElement> & { options: Array<string | { value: string; label: string }> }) {
   return (
-    <select {...p} className={cn(inputCls, "pr-8", p.className)}>
+    <select {...p} className={withField("pr-8", p.className)}>
       {options.map((o) => typeof o === "string"
         ? <option key={o} value={o}>{o}</option>
         : <option key={o.value} value={o.value}>{o.label}</option>)}
